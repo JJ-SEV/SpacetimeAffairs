@@ -577,24 +577,27 @@ def download_record_html(submission_id: str) -> str:
             SUM(CASE WHEN file_type = 'png' THEN 1 ELSE 0 END) AS png_count,
             MAX(downloaded_at) AS last_downloaded_at
         FROM download_events
-        WHERE submission_id = ? AND actor_role = 'player'
+        WHERE submission_id = ?
         """,
         (submission_id,),
     )
     total = int(summary["total"] or 0) if summary else 0
     if total == 0:
-        return '<p class="download-record muted">下载纪录：暂无玩家下载</p>'
+        return '<p class="download-record muted">下载纪录：暂无下载纪录</p>'
     recent = db_rows(
         """
-        SELECT file_type, downloaded_at
+        SELECT file_type, actor_role, downloaded_at
         FROM download_events
-        WHERE submission_id = ? AND actor_role = 'player'
+        WHERE submission_id = ?
         ORDER BY id DESC
         LIMIT 3
         """,
         (submission_id,),
     )
-    recent_text = " · ".join(f"{esc(item['downloaded_at'])} {esc(str(item['file_type']).upper())}" for item in recent)
+    recent_text = " · ".join(
+        f"{esc(item['downloaded_at'])} {esc(str(item['file_type']).upper())}"
+        for item in recent
+    )
     detail = f'<span>{recent_text}</span>' if recent_text else ""
     return (
         f'<p class="download-record"><b>下载纪录：</b>共 {total} 次 · '
@@ -1057,10 +1060,10 @@ def status_page(submission_id: str) -> bytes:
     <figcaption>飞行纪录预览</figcaption>
   </figure>
   <div class="actions">
-    <a class="button" href="/view?id={esc(row['id'])}&type=pdf" target="_blank" rel="noopener">打开 PDF</a>
-    <a class="button ghost" href="/view?id={esc(row['id'])}&type=png" target="_blank" rel="noopener">打开 PNG</a>
-    <a class="button download-button" href="/download?id={esc(row['id'])}&type=pdf" download="{pdf_name}">下载 PDF</a>
-    <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=png" download="{png_name}">下载 PNG</a>
+    <a class="button" href="/view?id={esc(row['id'])}&type=pdf&source=player" target="_blank" rel="noopener">打开 PDF</a>
+    <a class="button ghost" href="/view?id={esc(row['id'])}&type=png&source=player" target="_blank" rel="noopener">打开 PNG</a>
+    <a class="button download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
+    <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=png&source=player" download="{png_name}">下载 PNG</a>
   </div>
 </div>
 """
@@ -1108,6 +1111,7 @@ def admin_page() -> bytes:
                 f'<span class="generated-links">文件：'
                 f'<a href="/view?id={esc(row["id"])}&type=pdf" target="_blank" rel="noopener">PDF</a> '
                 f'<a href="/view?id={esc(row["id"])}&type=png" target="_blank" rel="noopener">PNG</a>'
+                f' <em>后台预览不计入下载纪录</em>'
                 f'</span>'
             )
         download_record = download_record_html(row["id"]) if row["pdf_filename"] else ""
@@ -1210,7 +1214,11 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             return forwarded.split(",", 1)[0].strip()
         return self.client_address[0] if self.client_address else ""
 
-    def download_actor_role(self) -> str:
+    def download_actor_role(self, source: str = "") -> str:
+        if source == "player":
+            return "player"
+        if source == "admin":
+            return "admin"
         if self.is_player():
             return "player"
         return "admin" if self.is_admin() else "unknown"
@@ -1320,18 +1328,16 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 if not path.exists():
                     self.send_error(404)
                     return
-                role = self.download_actor_role()
-                if role == "player":
-                    record_download(row, "png", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                role = self.download_actor_role(qs.get("source", [""])[0])
+                record_download(row, "png", role, self.client_ip(), self.headers.get("User-Agent", ""))
                 self.serve_path(path, Path(row["png_filename"]).name)
             elif kind == "pdf" and row["pdf_filename"]:
                 path = GENERATED_DIR / row["pdf_filename"]
                 if not path.exists():
                     self.send_error(404)
                     return
-                role = self.download_actor_role()
-                if role == "player":
-                    record_download(row, "pdf", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                role = self.download_actor_role(qs.get("source", [""])[0])
+                record_download(row, "pdf", role, self.client_ip(), self.headers.get("User-Agent", ""))
                 self.serve_path(path, Path(row["pdf_filename"]).name)
             else:
                 self.send_error(404)
