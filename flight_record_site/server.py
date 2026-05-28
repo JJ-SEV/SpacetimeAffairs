@@ -119,6 +119,14 @@ def ensure_db() -> None:
             db.execute("ALTER TABLE submissions ADD COLUMN user_id TEXT")
         if "user_key" not in submission_columns:
             db.execute("ALTER TABLE submissions ADD COLUMN user_key TEXT")
+        if "bond_original_filename" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN bond_original_filename TEXT")
+        if "bond_stored_filename" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN bond_stored_filename TEXT")
+        if "home_original_filename" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN home_original_filename TEXT")
+        if "home_stored_filename" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN home_stored_filename TEXT")
         db.execute(
             """
             UPDATE submissions
@@ -131,6 +139,22 @@ def ensure_db() -> None:
             UPDATE submissions
             SET user_key = LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), ''))
             WHERE (user_key IS NULL OR TRIM(user_key) = '') AND contact IS NOT NULL
+            """
+        )
+        db.execute(
+            """
+            UPDATE submissions
+            SET bond_original_filename = original_filename
+            WHERE (bond_original_filename IS NULL OR TRIM(bond_original_filename) = '')
+              AND original_filename IS NOT NULL
+            """
+        )
+        db.execute(
+            """
+            UPDATE submissions
+            SET bond_stored_filename = stored_filename
+            WHERE (bond_stored_filename IS NULL OR TRIM(bond_stored_filename) = '')
+              AND stored_filename IS NOT NULL
             """
         )
         db.execute(
@@ -551,6 +575,55 @@ def row_user_id(row: sqlite3.Row) -> str:
     return row_field(row, "user_id") or row_field(row, "contact")
 
 
+def proof_filename(row: sqlite3.Row, kind: str) -> str:
+    if kind == "home":
+        return row_field(row, "home_original_filename")
+    return row_field(row, "bond_original_filename") or row_field(row, "original_filename")
+
+
+def proof_stored_filename(row: sqlite3.Row, kind: str) -> str:
+    if kind == "home":
+        return row_field(row, "home_stored_filename")
+    return row_field(row, "bond_stored_filename") or row_field(row, "stored_filename")
+
+
+def proof_summary_html(row: sqlite3.Row, linked: bool = False) -> str:
+    items = []
+    for kind, label in (("bond", "牵绊度页面"), ("home", "主页")):
+        filename = proof_filename(row, kind)
+        stored = proof_stored_filename(row, kind)
+        if filename and stored:
+            if linked:
+                href = f"/proof?id={quote(row['id'])}&kind={kind}"
+                content = f'<a href="{href}" target="_blank" rel="noopener">{esc(filename)}</a>'
+            else:
+                content = esc(filename)
+        else:
+            content = '<span class="muted">旧提交未上传</span>'
+        items.append(f"<li><b>{label}</b><span>{content}</span></li>")
+    return f'<ul class="proof-list">{"".join(items)}</ul>'
+
+
+def uploaded_file_item(form: cgi.FieldStorage, field_name: str) -> cgi.FieldStorage | None:
+    if field_name not in form:
+        return None
+    item = form[field_name]
+    if isinstance(item, list):
+        item = item[0] if item else None
+    if item is None or not getattr(item, "filename", ""):
+        return None
+    return item
+
+
+def save_uploaded_file(file_item: cgi.FieldStorage, submission_id: str, tag: str) -> tuple[str, str]:
+    original = Path(str(file_item.filename)).name
+    suffix = Path(original).suffix.lower()[:12]
+    stored = f"{submission_id}-{tag}{suffix or '.bin'}"
+    with (UPLOAD_DIR / stored).open("wb") as f:
+        shutil.copyfileobj(file_item.file, f)
+    return original, stored
+
+
 def record_download(row: sqlite3.Row, file_type: str, actor_role: str, client_ip: str, user_agent: str) -> None:
     if file_type not in {"pdf", "png"}:
         return
@@ -685,8 +758,11 @@ def public_page(message: str = "") -> bytes:
     <label>用户ID（小红书号或邮箱）
       <input name="contact" maxlength="80" placeholder="请输入小红书号或邮箱" required>
     </label>
-    <label>自证文件
-      <input name="proof" type="file" accept="image/*,.pdf" required>
+    <label>自证文件：牵绊度页面
+      <input name="proof_bond" type="file" accept="image/*,.pdf" required>
+    </label>
+    <label>自证文件：主页
+      <input name="proof_home" type="file" accept="image/*,.pdf" required>
     </label>
     <button type="submit">提交审核</button>
   </form>
@@ -913,7 +989,7 @@ def submitted_page(submission_id: str) -> bytes:
       <dl class="meta compact">
         <div><dt>提交时间</dt><dd>{esc(row['created_at'])}</dd></div>
         <div><dt>用户ID</dt><dd>{esc(row_user_id(row))}</dd></div>
-        <div><dt>文件名</dt><dd>{esc(row['original_filename'])}</dd></div>
+        <div><dt>自证文件</dt><dd>{proof_summary_html(row)}</dd></div>
       </dl>
       <div class="confirm-actions">
         <a class="button confirm-button" href="/status?id={esc(row['id'])}">我已截图，查看审核进度</a>
@@ -1091,7 +1167,7 @@ def status_page(submission_id: str) -> bytes:
   <dl class="meta">
     <div><dt>提交时间</dt><dd>{esc(row['created_at'])}</dd></div>
     <div><dt>用户ID</dt><dd>{esc(row_user_id(row)) or "未填写"}</dd></div>
-    <div><dt>文件名</dt><dd>{esc(row['original_filename'])}</dd></div>
+    <div><dt>自证文件</dt><dd>{proof_summary_html(row)}</dd></div>
   </dl>
   {note}
   <div class="actions status-actions">
@@ -1108,7 +1184,6 @@ def admin_page() -> bytes:
     rows = db_rows("SELECT * FROM submissions ORDER BY created_at DESC")
     cards = []
     for row in rows:
-        proof_link = f"/proof?id={quote(row['id'])}"
         actions = ""
         if row["status"] == "pending":
             actions = f"""
@@ -1136,7 +1211,8 @@ def admin_page() -> bytes:
     {status_badge(row['status'])}
   </div>
   <p>{esc(row['created_at'])} · 用户ID：{esc(row_user_id(row)) or "未填写"}</p>
-  <p><a href="{proof_link}">{esc(row['original_filename'])}</a> {generated}</p>
+  <section class="proof-block"><span>自证文件</span>{proof_summary_html(row, linked=True)}</section>
+  <p>{generated}</p>
   {download_record}
   {actions}
 </article>
@@ -1305,7 +1381,15 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None:
                 self.send_error(404)
                 return
-            self.serve_path(UPLOAD_DIR / row["stored_filename"])
+            kind = qs.get("kind", ["bond"])[0]
+            if kind not in {"bond", "home"}:
+                self.send_error(404)
+                return
+            stored = proof_stored_filename(row, kind)
+            if not stored:
+                self.send_error(404)
+                return
+            self.serve_path(UPLOAD_DIR / stored)
         elif parsed.path == "/preview":
             if not self.require_player_or_admin():
                 return
@@ -1430,9 +1514,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not self.require_player():
                 return
             form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
-            proof = form["proof"] if "proof" in form else None
-            if proof is None or not proof.filename:
-                self.send_html(public_page("请上传自证文件。"), 400)
+            proof_bond = uploaded_file_item(form, "proof_bond")
+            proof_home = uploaded_file_item(form, "proof_home")
+            if proof_bond is None or proof_home is None:
+                self.send_html(public_page("请上传牵绊度页面和主页两张自证文件。"), 400)
                 return
             contact = form.getfirst("contact", "").strip()
             if not contact:
@@ -1452,17 +1537,31 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_html(public_page("这个小红书号或邮箱已经提交过自证。请使用第一次保存的提交编号查询审核进度。"), 400)
                 return
             submission_id = uuid.uuid4().hex[:8].upper()
-            original = Path(proof.filename).name
-            suffix = Path(original).suffix.lower()[:12]
-            stored = f"{submission_id}{suffix or '.bin'}"
-            with (UPLOAD_DIR / stored).open("wb") as f:
-                shutil.copyfileobj(proof.file, f)
+            bond_original, bond_stored = save_uploaded_file(proof_bond, submission_id, "bond")
+            home_original, home_stored = save_uploaded_file(proof_home, submission_id, "home")
             db_execute(
                 """
-                INSERT INTO submissions (id, created_at, status, contact, user_id, user_key, original_filename, stored_filename)
-                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
+                INSERT INTO submissions (
+                    id, created_at, status, contact, user_id, user_key,
+                    original_filename, stored_filename,
+                    bond_original_filename, bond_stored_filename,
+                    home_original_filename, home_stored_filename
+                )
+                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (submission_id, now_text(), contact, contact, contact_key, original, stored),
+                (
+                    submission_id,
+                    now_text(),
+                    contact,
+                    contact,
+                    contact_key,
+                    bond_original,
+                    bond_stored,
+                    bond_original,
+                    bond_stored,
+                    home_original,
+                    home_stored,
+                ),
             )
             self.redirect(f"/submitted?id={submission_id}")
         elif parsed.path == "/admin/login":

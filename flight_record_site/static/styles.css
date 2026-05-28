@@ -1016,6 +1016,30 @@ input[type="file"] {
   padding: 10px;
 }
 
+.proof-list {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.proof-list li {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.proof-list b {
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+.proof-list span {
+  min-width: 0;
+}
+
 .command-deck {
   position: relative;
   overflow: hidden;
@@ -1305,6 +1329,19 @@ dd {
 .submission p {
   margin: 0;
   color: var(--muted);
+}
+
+.proof-block {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.proof-block > span {
+  color: #f2fbf6;
+  font-weight: 800;
 }
 
 .generated-links,
