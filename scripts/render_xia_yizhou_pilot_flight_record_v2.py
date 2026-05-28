@@ -338,7 +338,12 @@ def draw_route_map(draw, box, coord_code=COORD_CODE):
         px = worm_x + math.cos(rad) * 150
         py = worm_y + math.sin(rad) * 74
         draw.line((worm_x, worm_y, px, py), fill=ORANGE + (75,), width=2)
-    draw.text((worm_x - 128, worm_y - 172), "FIXED DESTINATION VECTOR", font=font(FONT_TIMES_BOLD, 22), fill=(246, 241, 228))
+    vector_label = "FIXED DESTINATION VECTOR"
+    vector_font = fit_font(FONT_TIMES_BOLD, vector_label, 310, 22, 16)
+    vector_box = draw.textbbox((0, 0), vector_label, font=vector_font)
+    vector_w = vector_box[2] - vector_box[0]
+    vector_x = min(worm_x - 128, x2 - 76 - vector_w)
+    draw.text((vector_x, worm_y - 172), vector_label, font=vector_font, fill=(246, 241, 228))
 
     path = [
         (x1 + 110, y2 - 105),
