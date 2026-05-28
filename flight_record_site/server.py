@@ -1055,13 +1055,17 @@ def status_page(submission_id: str) -> bytes:
   </div>
   <p><b>目的地：</b>{esc(row['destination_name'])}</p>
   <p><b>目的地坐标：</b>{esc(row['destination_coordinate'])}</p>
-  <figure class="record-preview-frame">
+  <figure class="record-preview-frame" id="record-preview">
     <img class="record-preview" src="/preview?id={esc(row['id'])}" alt="飞行纪录预览">
-    <figcaption>飞行纪录预览</figcaption>
+    <figcaption>PNG 内部预览</figcaption>
   </figure>
+  <details class="pdf-inline-preview" id="pdf-preview">
+    <summary>PDF 内部预览</summary>
+    <iframe src="/view?id={esc(row['id'])}&type=pdf" title="PDF 内部预览"></iframe>
+  </details>
   <div class="actions">
-    <a class="button" href="/view?id={esc(row['id'])}&type=pdf&source=player" target="_blank" rel="noopener">打开 PDF</a>
-    <a class="button ghost" href="/view?id={esc(row['id'])}&type=png&source=player" target="_blank" rel="noopener">打开 PNG</a>
+    <a class="button" href="#record-preview">预览 PNG</a>
+    <a class="button ghost" href="#pdf-preview" onclick="document.getElementById('pdf-preview')?.setAttribute('open', 'open')">预览 PDF</a>
     <a class="button download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
     <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=png&source=player" download="{png_name}">下载 PNG</a>
   </div>

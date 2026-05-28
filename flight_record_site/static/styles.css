@@ -1221,6 +1221,44 @@ dd {
   background: rgba(2, 6, 10, 0.62);
 }
 
+.pdf-inline-preview {
+  margin: 16px 0 18px;
+  border: 1px solid rgba(103, 199, 239, 0.28);
+  border-radius: 8px;
+  background: rgba(4, 10, 16, 0.48);
+  overflow: hidden;
+}
+
+.pdf-inline-preview summary {
+  cursor: pointer;
+  padding: 13px 16px;
+  color: var(--text);
+  font-weight: 800;
+  list-style: none;
+}
+
+.pdf-inline-preview summary::-webkit-details-marker {
+  display: none;
+}
+
+.pdf-inline-preview summary::after {
+  content: "+";
+  float: right;
+  color: var(--accent-2);
+}
+
+.pdf-inline-preview[open] summary::after {
+  content: "-";
+}
+
+.pdf-inline-preview iframe {
+  display: block;
+  width: 100%;
+  height: min(76vh, 820px);
+  border: 0;
+  background: rgba(2, 6, 10, 0.62);
+}
+
 .queue {
   display: grid;
   gap: 12px;
