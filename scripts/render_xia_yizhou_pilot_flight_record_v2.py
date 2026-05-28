@@ -496,12 +496,18 @@ def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_
     name_line_y = dest_y + 116
     name_x1 = x1 + 76
     name_x2 = x1 + 1130
-    draw.line((name_x1, name_line_y, name_x2, name_line_y), fill=LINE, width=4)
     if destination_name:
         name_font = fit_font(FONT_HEI, destination_name, name_x2 - name_x1 - 24, 48, 24)
         name_bbox = draw.textbbox((0, 0), destination_name, font=name_font)
-        name_h = name_bbox[3] - name_bbox[1]
-        draw.text((name_x1 + 10, name_line_y - name_h - 12), destination_name, font=name_font, fill=INK)
+        text_x = name_x1 + 10
+        text_y = name_line_y - name_bbox[3] - 22
+        draw.text((text_x, text_y), destination_name, font=name_font, fill=INK)
+        text_w = name_bbox[2] - name_bbox[0]
+        line_start = min(text_x + text_w + 42, name_x2)
+        if line_start < name_x2 - 24:
+            draw.line((line_start, name_line_y, name_x2, name_line_y), fill=LINE, width=4)
+    else:
+        draw.line((name_x1, name_line_y, name_x2, name_line_y), fill=LINE, width=4)
 
     map_box = (x1 + 76, dest_y + 210, x1 + 1680, dest_y + 820)
     draw_route_map(draw, map_box, destination_coordinate)

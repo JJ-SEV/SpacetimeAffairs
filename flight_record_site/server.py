@@ -156,6 +156,11 @@ LOCAL_PLACES: tuple[dict[str, object], ...] = (
     {"name": "上海市奉贤区", "address": "上海市奉贤区", "lat": 30.9178, "lon": 121.4740, "kind": "行政区", "aliases": ("奉贤", "奉贤区")},
     {"name": "上海市崇明区", "address": "上海市崇明区", "lat": 31.6229, "lon": 121.3975, "kind": "行政区", "aliases": ("崇明", "崇明区")},
     {"name": "云岭东路", "address": "上海市普陀区云岭东路", "lat": 31.2244, "lon": 121.3980, "kind": "道路", "aliases": ("上海普陀区云岭东路", "普陀云岭东路", "云岭东路")},
+    {"name": "曹杨路", "address": "上海市普陀区曹杨路", "lat": 31.2412, "lon": 121.4175, "kind": "道路", "aliases": ("上海普陀区曹杨路", "普陀曹杨路")},
+    {"name": "武宁路", "address": "上海市普陀区武宁路", "lat": 31.2418, "lon": 121.4211, "kind": "道路", "aliases": ("上海普陀区武宁路", "普陀武宁路")},
+    {"name": "真如", "address": "上海市普陀区真如", "lat": 31.2526, "lon": 121.4025, "kind": "地点", "aliases": ("上海普陀真如", "真如镇")},
+    {"name": "桃浦", "address": "上海市普陀区桃浦", "lat": 31.2794, "lon": 121.3713, "kind": "地点", "aliases": ("上海普陀桃浦",)},
+    {"name": "中山北路", "address": "上海市普陀区中山北路", "lat": 31.2434, "lon": 121.4142, "kind": "道路", "aliases": ("上海普陀区中山北路", "普陀中山北路")},
     {"name": "长风公园", "address": "上海市普陀区大渡河路189号", "lat": 31.2269, "lon": 121.3958, "kind": "地点", "aliases": ("上海长风公园", "普陀长风公园")},
     {"name": "环球港", "address": "上海市普陀区中山北路3300号", "lat": 31.2313, "lon": 121.4139, "kind": "地点", "aliases": ("上海环球港", "月星环球港")},
     {"name": "外滩", "address": "上海市黄浦区中山东一路", "lat": 31.2404, "lon": 121.4903, "kind": "地点", "aliases": ("上海外滩", "中山东一路")},
@@ -168,6 +173,21 @@ LOCAL_PLACES: tuple[dict[str, object], ...] = (
     {"name": "上海迪士尼度假区", "address": "上海市浦东新区川沙新镇", "lat": 31.1434, "lon": 121.6579, "kind": "地点", "aliases": ("上海迪士尼", "迪士尼")},
     {"name": "上海虹桥站", "address": "上海市闵行区申贵路1500号", "lat": 31.1942, "lon": 121.3207, "kind": "交通枢纽", "aliases": ("虹桥站", "虹桥火车站", "上海虹桥火车站")},
     {"name": "北京市", "address": "北京市", "lat": 39.9042, "lon": 116.4074, "kind": "城市", "aliases": ("北京",)},
+    {"name": "北京市东城区", "address": "北京市东城区", "lat": 39.9289, "lon": 116.4164, "kind": "行政区", "aliases": ("北京东城", "东城区")},
+    {"name": "北京市西城区", "address": "北京市西城区", "lat": 39.9123, "lon": 116.3659, "kind": "行政区", "aliases": ("北京西城", "西城区")},
+    {"name": "北京市朝阳区", "address": "北京市朝阳区", "lat": 39.9219, "lon": 116.4431, "kind": "行政区", "aliases": ("北京朝阳", "朝阳区")},
+    {"name": "北京市海淀区", "address": "北京市海淀区", "lat": 39.9599, "lon": 116.2981, "kind": "行政区", "aliases": ("北京海淀", "海淀区")},
+    {"name": "北京市丰台区", "address": "北京市丰台区", "lat": 39.8584, "lon": 116.2867, "kind": "行政区", "aliases": ("北京丰台", "丰台区")},
+    {"name": "北京市石景山区", "address": "北京市石景山区", "lat": 39.9066, "lon": 116.2229, "kind": "行政区", "aliases": ("北京石景山", "石景山区")},
+    {"name": "北京市通州区", "address": "北京市通州区", "lat": 39.9099, "lon": 116.6564, "kind": "行政区", "aliases": ("北京通州", "通州区")},
+    {"name": "三里屯", "address": "北京市朝阳区三里屯", "lat": 39.9336, "lon": 116.4551, "kind": "地点", "aliases": ("北京三里屯", "朝阳三里屯")},
+    {"name": "望京", "address": "北京市朝阳区望京", "lat": 39.9968, "lon": 116.4697, "kind": "地点", "aliases": ("北京望京", "朝阳望京")},
+    {"name": "国贸", "address": "北京市朝阳区建国门外大街", "lat": 39.9097, "lon": 116.4600, "kind": "地点", "aliases": ("北京国贸", "中国国际贸易中心")},
+    {"name": "五道口", "address": "北京市海淀区五道口", "lat": 39.9928, "lon": 116.3372, "kind": "地点", "aliases": ("北京五道口", "海淀五道口")},
+    {"name": "中关村", "address": "北京市海淀区中关村", "lat": 39.9841, "lon": 116.3162, "kind": "地点", "aliases": ("北京中关村", "海淀中关村")},
+    {"name": "天安门广场", "address": "北京市东城区天安门广场", "lat": 39.9056, "lon": 116.3976, "kind": "地点", "aliases": ("北京天安门", "天安门")},
+    {"name": "故宫博物院", "address": "北京市东城区景山前街4号", "lat": 39.9163, "lon": 116.3972, "kind": "地点", "aliases": ("北京故宫", "故宫")},
+    {"name": "北京南站", "address": "北京市丰台区北京南站", "lat": 39.8652, "lon": 116.3785, "kind": "交通枢纽", "aliases": ("北京南", "北京南站")},
     {"name": "广州市", "address": "广东省广州市", "lat": 23.1291, "lon": 113.2644, "kind": "城市", "aliases": ("广州",)},
     {"name": "深圳市", "address": "广东省深圳市", "lat": 22.5431, "lon": 114.0579, "kind": "城市", "aliases": ("深圳",)},
     {"name": "杭州市", "address": "浙江省杭州市", "lat": 30.2741, "lon": 120.1551, "kind": "城市", "aliases": ("杭州",)},
@@ -194,6 +214,13 @@ def normalize_address(address: str) -> str:
 
 def normalize_place_query(value: str) -> str:
     return "".join(value.strip().lower().split())
+
+
+def fuzzy_place_term(value: str) -> str:
+    term = normalize_place_query(value)
+    for token in ("省", "市", "区", "县", "自治州", "特别行政区"):
+        term = term.replace(token, "")
+    return term
 
 
 def parse_location(value: object) -> tuple[float, float] | None:
@@ -231,6 +258,14 @@ def place_aliases(place: dict[str, object]) -> set[str]:
     return aliases
 
 
+def place_match_terms(place: dict[str, object]) -> set[str]:
+    terms: set[str] = set()
+    for alias in place_aliases(place):
+        terms.add(normalize_place_query(alias))
+        terms.add(fuzzy_place_term(alias))
+    return {term for term in terms if term}
+
+
 def place_result(place: dict[str, object], source: str = "built-in") -> dict[str, object]:
     return {
         "name": place["name"],
@@ -244,25 +279,41 @@ def place_result(place: dict[str, object], source: str = "built-in") -> dict[str
 
 def local_address_matches(query: str, limit: int = 6) -> list[dict[str, object]]:
     q = normalize_place_query(query)
+    fuzzy_q = fuzzy_place_term(query)
     if len(q) < 2:
         return []
     matches: list[tuple[int, dict[str, object]]] = []
     for place in LOCAL_PLACES:
         score = 0
-        for alias in place_aliases(place):
-            a = normalize_place_query(alias)
+        for a in place_match_terms(place):
             if not a:
                 continue
             if q == a:
                 score = max(score, 130 + len(a))
+            elif fuzzy_q and fuzzy_q == a:
+                score = max(score, 124 + len(a))
             elif a in q:
                 score = max(score, 105 + len(a))
+            elif fuzzy_q and a in fuzzy_q:
+                score = max(score, 100 + len(a))
             elif q in a:
                 score = max(score, 80 + len(q))
+            elif fuzzy_q and fuzzy_q in a:
+                score = max(score, 74 + len(fuzzy_q))
         if score:
             matches.append((score, place_result(place)))
     matches.sort(key=lambda item: (-item[0], len(str(item[1]["address"]))))
     return [match for _, match in matches[:limit]]
+
+
+def custom_address_result(query: str) -> dict[str, object]:
+    cleaned = " ".join(query.strip().split())
+    return {
+        "name": f"按输入使用：{cleaned}",
+        "address": cleaned,
+        "kind": "自定义位置",
+        "source": "custom",
+    }
 
 
 def fetch_json(url: str, timeout: float = 4.0) -> dict[str, object] | None:
@@ -365,6 +416,11 @@ def address_suggestions(query: str, limit: int = 6) -> list[dict[str, object]]:
         results.append(item)
         if len(results) >= limit:
             break
+    if len(results) < limit and len(normalize_place_query(query)) >= 2:
+        custom = custom_address_result(query)
+        key = normalize_place_query(f"{custom['name']}|{custom['address']}")
+        if key not in seen:
+            results.append(custom)
     _ADDRESS_SUGGEST_CACHE[cache_key] = results
     return results
 
@@ -839,7 +895,7 @@ def status_page(submission_id: str) -> bytes:
       const detail = document.createElement("span");
       detail.textContent = item.address || "";
       const meta = document.createElement("em");
-      meta.textContent = item.source === "amap" ? "MAP LINK" : "LOCAL INDEX";
+      meta.textContent = item.source === "amap" ? "MAP LINK" : (item.source === "custom" ? "CUSTOM" : "LOCAL INDEX");
 
       button.append(title, detail, meta);
       button.addEventListener("click", () => {{
