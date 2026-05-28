@@ -275,6 +275,25 @@ body.home-body::after {
   padding: 42px;
 }
 
+.auth-help {
+  position: fixed;
+  top: 22px;
+  right: 24px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(103, 199, 239, 0.42);
+  border-radius: 6px;
+  background: rgba(4, 12, 19, 0.72);
+  color: #dceff3;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
 .auth-screen {
   width: min(1320px, 100%);
   min-height: min(760px, calc(100svh - 84px));
@@ -723,6 +742,136 @@ nav a {
   border-color: rgba(103, 199, 239, 0.28);
   background: rgba(6, 14, 22, 0.68);
   color: #dceff3;
+}
+
+.help-console {
+  position: relative;
+  overflow: hidden;
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 28px;
+  align-items: center;
+  padding: 28px;
+  border: 1px solid rgba(103, 199, 239, 0.28);
+  border-left: 8px solid var(--accent);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(7, 17, 25, 0.92), rgba(18, 28, 37, 0.68)),
+    rgba(4, 10, 16, 0.62);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.help-console::before,
+.help-console::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.help-console::before {
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 64px, rgba(103, 199, 239, 0.055) 65px),
+    radial-gradient(circle at 84% 28%, rgba(255, 123, 53, 0.22), transparent 22%),
+    radial-gradient(circle at 16% 74%, rgba(128, 227, 188, 0.12), transparent 24%);
+}
+
+.help-console::after {
+  inset: auto 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--green), var(--accent));
+  opacity: 0.78;
+}
+
+.help-copy,
+.qr-dock {
+  position: relative;
+  z-index: 1;
+}
+
+.help-copy h2 {
+  margin: 8px 0 10px;
+  max-width: 640px;
+  font-family: "Times New Roman", serif;
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1.02;
+}
+
+.contact-ledger {
+  display: grid;
+  gap: 10px;
+  max-width: 480px;
+  margin: 24px 0 20px;
+}
+
+.contact-ledger div {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 199, 239, 0.24);
+  background: rgba(3, 9, 15, 0.36);
+}
+
+.contact-ledger dd {
+  margin: 0;
+  color: #f4fbf7;
+  font-weight: 800;
+}
+
+.contact-ledger code {
+  color: var(--green);
+  font-family: Arial, "STHeiti", sans-serif;
+  font-size: 18px;
+}
+
+.qr-dock {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.qr-dock img {
+  width: min(100%, 318px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  padding: 12px;
+  border: 1px solid rgba(128, 227, 188, 0.48);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 8px rgba(103, 199, 239, 0.06), 0 20px 58px rgba(0, 0, 0, 0.42);
+}
+
+.qr-dock figcaption {
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.qr-scanline {
+  position: absolute;
+  top: 28px;
+  width: min(86%, 290px);
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(128, 227, 188, 0.95), transparent);
+  box-shadow: 0 0 16px rgba(128, 227, 188, 0.65);
+  animation: helpScan 3.6s ease-in-out infinite;
+}
+
+@keyframes helpScan {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.34;
+  }
+  50% {
+    transform: translateY(292px);
+    opacity: 0.86;
+  }
 }
 
 .button.ghost,
@@ -1392,6 +1541,7 @@ dd {
 
   nav,
   .command-deck,
+  .help-console,
   .workspace.two,
   .confirm-grid,
   .meta {
@@ -1405,6 +1555,23 @@ dd {
 
   nav {
     display: grid;
+  }
+
+  .auth-help {
+    top: 14px;
+    right: 14px;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .help-console {
+    padding: 22px;
+  }
+
+  .contact-ledger div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .status {

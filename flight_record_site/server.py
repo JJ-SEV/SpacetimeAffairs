@@ -687,8 +687,12 @@ def layout(title: str, body: str, admin: bool = False, body_class: str = "") -> 
     nav_links = ""
     if admin:
         nav_links = '<a href="/">玩家入口</a><a href="/admin">审核</a><a href="/admin/logout">退出审核</a>'
+    elif body_class == "help-body":
+        nav_links = '<a href="/">返回控制台</a>'
     elif body_class == "home-body":
-        nav_links = '<a href="/logout">退出</a>'
+        nav_links = '<a href="/help">帮助</a><a href="/logout">退出</a>'
+    else:
+        nav_links = '<a href="/help">帮助</a>'
     nav_block = f"<nav>{nav_links}</nav>" if nav_links else ""
     body_class_attr = f' class="{esc(body_class)}"' if body_class else ""
     page = f"""<!doctype html>
@@ -782,10 +786,52 @@ def public_page(message: str = "") -> bytes:
     return layout("飞行纪录审核台", body, body_class="home-body")
 
 
+def help_page() -> bytes:
+    body = """
+<section class="help-console">
+  <div class="help-copy">
+    <p class="eyebrow">SUPPORT CHANNEL</p>
+    <h2>遇到问题，可以小红书联系我</h2>
+    <p class="muted">上传、自证审核、编号查询、文件下载遇到异常时，可以带上提交编号来找我。</p>
+    <dl class="contact-ledger">
+      <div>
+        <dt>CALLSIGN</dt>
+        <dd>SEV（出逃版）</dd>
+      </div>
+      <div>
+        <dt>REDNOTE ID</dt>
+        <dd><code>7291792900</code></dd>
+      </div>
+    </dl>
+    <button class="button ghost copy-contact" type="button" data-copy="7291792900">复制小红书号</button>
+  </div>
+  <figure class="qr-dock">
+    <span class="qr-scanline" aria-hidden="true"></span>
+    <img src="/static/assets/xhs-sev-qr.png" alt="SEV（出逃版）小红书二维码">
+    <figcaption>SCAN REDNOTE CONTACT</figcaption>
+  </figure>
+</section>
+<script>
+  document.querySelector(".copy-contact")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy || "");
+      button.textContent = "已复制";
+      setTimeout(() => { button.textContent = "复制小红书号"; }, 1400);
+    } catch (error) {
+      button.textContent = "小红书号 7291792900";
+    }
+  });
+</script>
+"""
+    return layout("帮助", body, body_class="help-body")
+
+
 def player_gate_page(message: str = "") -> bytes:
     notice = f'<div class="auth-alert">{esc(message)}</div>' if message else ""
     body = f"""
 <main class="auth-shell">
+  <a class="auth-help" href="/help">帮助</a>
   <section class="auth-screen">
     <div class="auth-visual" aria-hidden="true">
       <span class="auth-image-layer"></span>
@@ -1339,6 +1385,8 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_html(public_page())
             else:
                 self.send_html(player_gate_page())
+        elif parsed.path == "/help":
+            self.send_html(help_page())
         elif parsed.path == "/gate/loading":
             if not self.require_player():
                 return
