@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+flight_record_site/data/
+flight_record_site/data/uploads/
+flight_record_site/data/generated/
+flight_record_site/data/*.sqlite3
+flight_record_site/data/*.log
+flight_record_site/data/*secret*
+flight_record_site/data/*password*
+flight_record_site/data/amap_key.txt

@@ -1,0 +1,17 @@
+*
+
+!Dockerfile
+!requirements.txt
+
+!flight_record_site/
+!flight_record_site/server.py
+!flight_record_site/static/
+!flight_record_site/static/**
+flight_record_site/static/assets/pilot-auth-visual.png
+flight_record_site/static/assets/pilot-console-bg.png
+
+!scripts/
+!scripts/render_xia_yizhou_pilot_flight_record_v2.py
+
+!assets/
+!assets/xia_yizhou_chinese_signature.png

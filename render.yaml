@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: calebflightgate
+    runtime: docker
+    plan: starter
+    region: singapore
+    autoDeployTrigger: commit
+    envVars:
+      - key: FLIGHT_RECORD_ADMIN_PASSWORD
+        value: wuyixuan
+      - key: FLIGHT_RECORD_ADMIN_SECRET
+        generateValue: true
+      - key: PORT
+        value: 8787
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    disk:
+      name: flight-record-data
+      mountPath: /app/flight_record_site/data
+      sizeGB: 1
