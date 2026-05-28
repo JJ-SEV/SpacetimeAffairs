@@ -536,6 +536,9 @@ def normalize_contact(contact: str) -> str:
     return "".join(contact.split()).lower()
 
 
+VALID_PILOT_IDS = {"CALEB", "XIAYIZHOU"}
+
+
 def row_field(row: sqlite3.Row, name: str, default: str = "") -> str:
     try:
         value = row[name]
@@ -718,11 +721,12 @@ def player_gate_page(message: str = "") -> bytes:
       {notice}
       <form class="auth-card" action="/gate" method="post">
         <div class="auth-state">SYNC 0/8</div>
-        <label>飞行员 ID
+        <label class="pilot-id-label">飞行员 ID
           <input name="pilot_id" class="auth-input pilot-id-input" autocomplete="username" required>
+          <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
         <label>密码
-          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="current-password" required>
+          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="[0-9]{{8}}" minlength="8" maxlength="8" autocomplete="current-password" required>
         </label>
         <div class="digit-rack" aria-hidden="true">
           <span></span><span></span><span></span><span></span>
@@ -739,9 +743,15 @@ def player_gate_page(message: str = "") -> bytes:
   const digitRack = document.querySelector(".digit-rack");
   const cells = Array.from(document.querySelectorAll(".digit-rack span"));
   const state = document.querySelector(".auth-state");
+  const pilotHint = document.querySelector(".pilot-id-hint");
+  const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
   let invalidTimer;
   function syncPilot() {{
     pilotInput.value = pilotInput.value.replace(/\\s/g, "").toUpperCase();
+    const value = pilotInput.value;
+    const invalid = value.length > 0 && !validPilots.has(value);
+    pilotInput.classList.toggle("invalid", invalid);
+    pilotHint.textContent = invalid ? "飞行员ID不存在" : "";
   }}
   function flashInvalid() {{
     digitRack.classList.add("invalid");
@@ -754,26 +764,7 @@ def player_gate_page(message: str = "") -> bytes:
   }}
   function birthdayDigits(value) {{
     const digits = value.replace(/\\D/g, "");
-    let clean = "";
-    let rejected = false;
-    for (const digit of digits) {{
-      if (clean.length === 0) {{
-        if (digit === "1" || digit === "2") {{
-          clean += digit;
-        }} else {{
-          rejected = true;
-        }}
-      }} else if (clean.length === 1) {{
-        if ((clean === "1" && digit === "9") || (clean === "2" && digit === "0")) {{
-          clean += digit;
-        }} else {{
-          rejected = true;
-        }}
-      }} else if (clean.length < 8) {{
-        clean += digit;
-      }}
-    }}
-    return {{ clean, rejected }};
+    return {{ clean: digits.slice(0, 8), rejected: digits !== value }};
   }}
   function syncCode(showError = true) {{
     const result = birthdayDigits(codeInput.value);
@@ -1410,8 +1401,8 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             form = self.parse_urlencoded()
             pilot_id = form.get("pilot_id", "").strip().upper()
             password = form.get("password", form.get("birthday", "")).strip()
-            if pilot_id != "CALEB" or len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
-                self.send_html(player_gate_page("飞行员 ID 或密码格式不正确。密码需为 19 或 20 开头的 8 位数字。"), 403)
+            if pilot_id not in VALID_PILOT_IDS or len(password) != 8 or not password.isdigit():
+                self.send_html(player_gate_page("飞行员ID或密码不正确，密码为8位数字。"), 403)
                 return
             self.redirect(
                 "/gate/loading",

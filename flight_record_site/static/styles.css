@@ -425,6 +425,28 @@ body.home-body::after {
   font-weight: 700;
 }
 
+.auth-input.invalid {
+  border-color: rgba(255, 111, 97, 0.82);
+  box-shadow: 0 0 0 3px rgba(255, 111, 97, 0.12);
+}
+
+.pilot-id-label {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.pilot-id-label > input {
+  grid-column: 1 / -1;
+}
+
+.pilot-id-hint {
+  justify-self: end;
+  min-height: 16px;
+  color: #ffd8d3;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .pilot-id-input {
   text-transform: uppercase;
 }
