@@ -791,8 +791,6 @@ def help_page() -> bytes:
 <section class="help-console">
   <div class="help-copy">
     <p class="eyebrow">SUPPORT CHANNEL</p>
-    <h2>遇到问题，可以小红书联系我</h2>
-    <p class="muted">上传、自证审核、编号查询、文件下载遇到异常时，可以带上提交编号来找我。</p>
     <dl class="contact-ledger">
       <div>
         <dt>CALLSIGN</dt>
@@ -803,7 +801,7 @@ def help_page() -> bytes:
         <dd><code>7291792900</code></dd>
       </div>
     </dl>
-    <button class="button ghost copy-contact" type="button" data-copy="7291792900">复制小红书号</button>
+    <button class="button ghost copy-contact" type="button" data-copy="7291792900">复制编号</button>
   </div>
   <figure class="qr-dock">
     <span class="qr-scanline" aria-hidden="true"></span>
@@ -817,9 +815,9 @@ def help_page() -> bytes:
     try {
       await navigator.clipboard.writeText(button.dataset.copy || "");
       button.textContent = "已复制";
-      setTimeout(() => { button.textContent = "复制小红书号"; }, 1400);
+      setTimeout(() => { button.textContent = "复制编号"; }, 1400);
     } catch (error) {
-      button.textContent = "小红书号 7291792900";
+      button.textContent = "7291792900";
     }
   });
 </script>
