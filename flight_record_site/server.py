@@ -777,7 +777,7 @@ def public_page(message: str = "") -> bytes:
       <h2>查看进度</h2>
     </div>
     <label>提交编号
-      <input name="id" placeholder="例如 7F3A2B19" required>
+      <input name="id" placeholder="请输入提交编号" required>
     </label>
     <button type="submit">查看状态</button>
   </form>
