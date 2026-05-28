@@ -726,7 +726,7 @@ def player_gate_page(message: str = "") -> bytes:
           <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
         <label>密码
-          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="[0-9]{{8}}" minlength="8" maxlength="8" autocomplete="current-password" required>
+          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="current-password" required>
         </label>
         <div class="digit-rack" aria-hidden="true">
           <span></span><span></span><span></span><span></span>
@@ -755,7 +755,6 @@ def player_gate_page(message: str = "") -> bytes:
   }}
   function flashInvalid() {{
     digitRack.classList.add("invalid");
-    state.textContent = "DATE CODE ERROR";
     clearTimeout(invalidTimer);
     invalidTimer = setTimeout(() => {{
       digitRack.classList.remove("invalid");
@@ -764,7 +763,26 @@ def player_gate_page(message: str = "") -> bytes:
   }}
   function birthdayDigits(value) {{
     const digits = value.replace(/\\D/g, "");
-    return {{ clean: digits.slice(0, 8), rejected: digits !== value }};
+    let clean = "";
+    let rejected = digits !== value;
+    for (const digit of digits) {{
+      if (clean.length === 0) {{
+        if (digit === "1" || digit === "2") {{
+          clean += digit;
+        }} else {{
+          rejected = true;
+        }}
+      }} else if (clean.length === 1) {{
+        if ((clean === "1" && digit === "9") || (clean === "2" && digit === "0")) {{
+          clean += digit;
+        }} else {{
+          rejected = true;
+        }}
+      }} else if (clean.length < 8) {{
+        clean += digit;
+      }}
+    }}
+    return {{ clean, rejected }};
   }}
   function syncCode(showError = true) {{
     const result = birthdayDigits(codeInput.value);
@@ -775,11 +793,11 @@ def player_gate_page(message: str = "") -> bytes:
     cells.forEach((cell, index) => {{
       cell.classList.toggle("filled", index < clean.length);
     }});
+    state.textContent = clean.length === 8 ? "CLEARANCE READY" : `SYNC ${{clean.length}}/8`;
     if (result.rejected && showError) {{
       flashInvalid();
       return;
     }}
-    state.textContent = clean.length === 8 ? "CLEARANCE READY" : `SYNC ${{clean.length}}/8`;
   }}
   pilotInput.addEventListener("input", syncPilot);
   codeInput.addEventListener("input", syncCode);
@@ -1401,7 +1419,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             form = self.parse_urlencoded()
             pilot_id = form.get("pilot_id", "").strip().upper()
             password = form.get("password", form.get("birthday", "")).strip()
-            if pilot_id not in VALID_PILOT_IDS or len(password) != 8 or not password.isdigit():
+            if pilot_id not in VALID_PILOT_IDS or len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
                 self.send_html(player_gate_page("飞行员ID或密码不正确，密码为8位数字。"), 403)
                 return
             self.redirect(
