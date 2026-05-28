@@ -624,6 +624,26 @@ def save_uploaded_file(file_item: cgi.FieldStorage, submission_id: str, tag: str
     return original, stored
 
 
+def regenerate_record_files(row: sqlite3.Row) -> bool:
+    if not row["destination_name"] or not row["destination_coordinate"] or not row["png_filename"] or not row["pdf_filename"]:
+        return False
+    png_path = GENERATED_DIR / row["png_filename"]
+    pdf_path = GENERATED_DIR / row["pdf_filename"]
+    if png_path.exists() and pdf_path.exists():
+        return True
+    try:
+        flight_renderer.generate_record(
+            destination_name=row["destination_name"],
+            destination_coordinate=row["destination_coordinate"],
+            out_path=png_path,
+            pdf_path=pdf_path,
+        )
+    except Exception as exc:
+        print(f"Failed to regenerate files for {row['id']}: {exc}", file=sys.stderr)
+        return False
+    return png_path.exists() and pdf_path.exists()
+
+
 def record_download(row: sqlite3.Row, file_type: str, actor_role: str, client_ip: str, user_agent: str) -> None:
     if file_type not in {"pdf", "png"}:
         return
@@ -1175,7 +1195,7 @@ def status_page(submission_id: str) -> bytes:
 """
     if row["pdf_filename"]:
         pdf_name = esc(Path(row["pdf_filename"]).name)
-        png_name = esc(Path(row["png_filename"]).name)
+        preview_token = quote(str(row["generated_at"] or row["id"]))
         downloads = f"""
 <div class="panel wide success-panel">
   <div class="section-head">
@@ -1185,18 +1205,12 @@ def status_page(submission_id: str) -> bytes:
   <p><b>目的地：</b>{esc(row['destination_name'])}</p>
   <p><b>目的地坐标：</b>{esc(row['destination_coordinate'])}</p>
   <figure class="record-preview-frame" id="record-preview">
-    <img class="record-preview" src="/preview?id={esc(row['id'])}" alt="飞行纪录预览">
-    <figcaption>PNG 内部预览</figcaption>
+    <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+    <p class="preview-fallback" hidden>预览加载失败，请直接下载 PDF。</p>
+    <figcaption>飞行纪录预览</figcaption>
   </figure>
-  <details class="pdf-inline-preview" id="pdf-preview">
-    <summary>PDF 内部预览</summary>
-    <iframe src="/view?id={esc(row['id'])}&type=pdf" title="PDF 内部预览"></iframe>
-  </details>
   <div class="actions">
-    <a class="button" href="#record-preview">预览 PNG</a>
-    <a class="button ghost" href="#pdf-preview" onclick="document.getElementById('pdf-preview')?.setAttribute('open', 'open')">预览 PDF</a>
     <a class="button download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
-    <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=png&source=player" download="{png_name}">下载 PNG</a>
   </div>
 </div>
 """
@@ -1443,7 +1457,11 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None or not row["png_filename"]:
                 self.send_error(404)
                 return
-            self.serve_path(GENERATED_DIR / row["png_filename"])
+            path = GENERATED_DIR / row["png_filename"]
+            if not path.exists() and not regenerate_record_files(row):
+                self.send_error(404)
+                return
+            self.serve_path(path)
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
                 return
@@ -1453,9 +1471,17 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if kind == "png" and row["png_filename"]:
-                self.serve_path(GENERATED_DIR / row["png_filename"])
+                path = GENERATED_DIR / row["png_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path(path)
             elif kind == "pdf" and row["pdf_filename"]:
-                self.serve_path(GENERATED_DIR / row["pdf_filename"])
+                path = GENERATED_DIR / row["pdf_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path(path)
             else:
                 self.send_error(404)
         elif parsed.path == "/download":
@@ -1468,7 +1494,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
-                if not path.exists():
+                if not path.exists() and not regenerate_record_files(row):
                     self.send_error(404)
                     return
                 role = self.download_actor_role(qs.get("source", [""])[0])
@@ -1476,7 +1502,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.serve_path(path, Path(row["png_filename"]).name)
             elif kind == "pdf" and row["pdf_filename"]:
                 path = GENERATED_DIR / row["pdf_filename"]
-                if not path.exists():
+                if not path.exists() and not regenerate_record_files(row):
                     self.send_error(404)
                     return
                 role = self.download_actor_role(qs.get("source", [""])[0])
@@ -1508,7 +1534,11 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None or not row["png_filename"]:
                 self.send_error(404)
                 return
-            self.serve_path_head(GENERATED_DIR / row["png_filename"])
+            path = GENERATED_DIR / row["png_filename"]
+            if not path.exists() and not regenerate_record_files(row):
+                self.send_error(404)
+                return
+            self.serve_path_head(path)
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
                 return
@@ -1518,9 +1548,17 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if kind == "png" and row["png_filename"]:
-                self.serve_path_head(GENERATED_DIR / row["png_filename"])
+                path = GENERATED_DIR / row["png_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path)
             elif kind == "pdf" and row["pdf_filename"]:
-                self.serve_path_head(GENERATED_DIR / row["pdf_filename"])
+                path = GENERATED_DIR / row["pdf_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path)
             else:
                 self.send_error(404)
         elif parsed.path == "/download":
@@ -1532,9 +1570,17 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if kind == "png" and row["png_filename"]:
-                self.serve_path_head(GENERATED_DIR / row["png_filename"], Path(row["png_filename"]).name)
+                path = GENERATED_DIR / row["png_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path, Path(row["png_filename"]).name)
             elif kind == "pdf" and row["pdf_filename"]:
-                self.serve_path_head(GENERATED_DIR / row["pdf_filename"], Path(row["pdf_filename"]).name)
+                path = GENERATED_DIR / row["pdf_filename"]
+                if not path.exists() and not regenerate_record_files(row):
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path, Path(row["pdf_filename"]).name)
             else:
                 self.send_error(404)
         elif parsed.path.startswith("/static/"):

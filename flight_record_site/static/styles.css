@@ -1416,42 +1416,21 @@ dd {
   background: rgba(2, 6, 10, 0.62);
 }
 
-.pdf-inline-preview {
-  margin: 16px 0 18px;
-  border: 1px solid rgba(103, 199, 239, 0.28);
-  border-radius: 8px;
-  background: rgba(4, 10, 16, 0.48);
-  overflow: hidden;
-}
-
-.pdf-inline-preview summary {
-  cursor: pointer;
-  padding: 13px 16px;
-  color: var(--text);
-  font-weight: 800;
-  list-style: none;
-}
-
-.pdf-inline-preview summary::-webkit-details-marker {
-  display: none;
-}
-
-.pdf-inline-preview summary::after {
-  content: "+";
-  float: right;
-  color: var(--accent-2);
-}
-
-.pdf-inline-preview[open] summary::after {
-  content: "-";
-}
-
-.pdf-inline-preview iframe {
-  display: block;
-  width: 100%;
-  height: min(76vh, 820px);
-  border: 0;
+.preview-fallback {
+  display: grid;
+  min-height: 220px;
+  margin: 0;
+  place-items: center;
+  border: 1px dashed rgba(255, 123, 53, 0.52);
+  border-radius: 6px;
   background: rgba(2, 6, 10, 0.62);
+  color: #ffd8d3;
+  font-weight: 800;
+  text-align: center;
+}
+
+.preview-fallback[hidden] {
+  display: none;
 }
 
 .queue {
