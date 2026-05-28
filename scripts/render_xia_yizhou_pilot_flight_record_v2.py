@@ -88,6 +88,12 @@ def fit_font(path, text, max_width, start_size, min_size=18):
     return font(path, min_size)
 
 
+def draw_fitted_text(draw, xy, text, font_path, max_width, start_size, min_size, fill):
+    fitted = fit_font(font_path, text, max_width, start_size, min_size)
+    draw.text(xy, text, font=fitted, fill=fill)
+    return fitted
+
+
 def paper_texture(size, seed=626):
     random.seed(seed)
     img = Image.new("RGBA", size, PAPER + (255,))
@@ -288,7 +294,11 @@ def draw_route_map(draw, box, coord_code=COORD_CODE):
     star = (238, 220, 167)
     draw.rectangle(box, fill=dark + (255,), outline=LINE, width=4)
     draw.text((x1 + 34, y1 + 28), "INTERSTELLAR COORDINATE MAP", font=font(FONT_TIMES_BOLD, 30), fill=(246, 241, 228))
-    draw.text((x2 - 318, y1 + 28), "DESTINATION CONFIRMED", font=font(FONT_TIMES_BOLD, 24), fill=(210, 196, 176))
+    confirmed = "DESTINATION CONFIRMED"
+    confirmed_font = fit_font(FONT_TIMES_BOLD, confirmed, 260, 22, 16)
+    confirmed_box = draw.textbbox((0, 0), confirmed, font=confirmed_font)
+    confirmed_w = confirmed_box[2] - confirmed_box[0]
+    draw.text((x2 - 76 - confirmed_w, y1 + 30), confirmed, font=confirmed_font, fill=(210, 196, 176))
 
     random.seed(260613)
     for _ in range(150):
@@ -435,11 +445,11 @@ def draw_table(draw, box):
         y = y1 + r * row_h + 19
         if not any(row):
             continue
-        row_font = font(FONT_TIMES_BOLD, 25)
-        draw.text((cols[0] + 22, y), row[0], font=row_font, fill=INK)
-        draw.text((cols[1] + 22, y), row[1], font=row_font, fill=INK)
-        draw.text((cols[2] + 22, y), row[2], font=row_font, fill=INK)
-        draw.text((cols[3] + 22, y), row[3], font=row_font, fill=MUTED)
+        cell_pad = 22
+        draw_fitted_text(draw, (cols[0] + cell_pad, y), row[0], FONT_TIMES_BOLD, cols[1] - cols[0] - cell_pad * 2, 25, 15, INK)
+        draw_fitted_text(draw, (cols[1] + cell_pad, y), row[1], FONT_TIMES_BOLD, cols[2] - cols[1] - cell_pad * 2, 25, 15, INK)
+        draw_fitted_text(draw, (cols[2] + cell_pad, y), row[2], FONT_TIMES_BOLD, cols[3] - cols[2] - cell_pad * 2, 25, 15, INK)
+        draw_fitted_text(draw, (cols[3] + cell_pad, y), row[3], FONT_TIMES_BOLD, cols[4] - cols[3] - cell_pad * 2, 25, 15, MUTED)
 
 
 def draw_instrument(draw, cx, cy, r, label, value):

@@ -624,12 +624,12 @@ def save_uploaded_file(file_item: cgi.FieldStorage, submission_id: str, tag: str
     return original, stored
 
 
-def regenerate_record_files(row: sqlite3.Row) -> bool:
+def regenerate_record_files(row: sqlite3.Row, force: bool = False) -> bool:
     if not row["destination_name"] or not row["destination_coordinate"] or not row["png_filename"] or not row["pdf_filename"]:
         return False
     png_path = GENERATED_DIR / row["png_filename"]
     pdf_path = GENERATED_DIR / row["pdf_filename"]
-    if png_path.exists() and pdf_path.exists():
+    if not force and png_path.exists() and pdf_path.exists():
         return True
     try:
         flight_renderer.generate_record(
@@ -1458,7 +1458,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             path = GENERATED_DIR / row["png_filename"]
-            if not path.exists() and not regenerate_record_files(row):
+            if not regenerate_record_files(row, force=True):
                 self.send_error(404)
                 return
             self.serve_path(path)
@@ -1472,13 +1472,13 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
-                if not path.exists() and not regenerate_record_files(row):
+                if not regenerate_record_files(row, force=True):
                     self.send_error(404)
                     return
                 self.serve_path(path)
             elif kind == "pdf" and row["pdf_filename"]:
                 path = GENERATED_DIR / row["pdf_filename"]
-                if not path.exists() and not regenerate_record_files(row):
+                if not regenerate_record_files(row, force=True):
                     self.send_error(404)
                     return
                 self.serve_path(path)
@@ -1494,7 +1494,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
-                if not path.exists() and not regenerate_record_files(row):
+                if not regenerate_record_files(row, force=True):
                     self.send_error(404)
                     return
                 role = self.download_actor_role(qs.get("source", [""])[0])
@@ -1502,7 +1502,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.serve_path(path, Path(row["png_filename"]).name)
             elif kind == "pdf" and row["pdf_filename"]:
                 path = GENERATED_DIR / row["pdf_filename"]
-                if not path.exists() and not regenerate_record_files(row):
+                if not regenerate_record_files(row, force=True):
                     self.send_error(404)
                     return
                 role = self.download_actor_role(qs.get("source", [""])[0])
