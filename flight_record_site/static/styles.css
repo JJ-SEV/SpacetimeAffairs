@@ -1247,6 +1247,19 @@ dd {
   color: var(--muted);
 }
 
+.generated-links,
+.download-record {
+  font-size: 13px;
+}
+
+.download-record b {
+  color: var(--text);
+}
+
+.download-record.compact {
+  color: rgba(188, 213, 222, 0.72);
+}
+
 @media (max-width: 980px) {
   .auth-shell {
     padding: 18px;

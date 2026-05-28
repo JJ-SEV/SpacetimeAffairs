@@ -114,6 +114,42 @@ def ensure_db() -> None:
             )
             """
         )
+        submission_columns = {row[1] for row in db.execute("PRAGMA table_info(submissions)")}
+        if "user_id" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN user_id TEXT")
+        if "user_key" not in submission_columns:
+            db.execute("ALTER TABLE submissions ADD COLUMN user_key TEXT")
+        db.execute(
+            """
+            UPDATE submissions
+            SET user_id = contact
+            WHERE (user_id IS NULL OR TRIM(user_id) = '') AND contact IS NOT NULL
+            """
+        )
+        db.execute(
+            """
+            UPDATE submissions
+            SET user_key = LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), ''))
+            WHERE (user_key IS NULL OR TRIM(user_key) = '') AND contact IS NOT NULL
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS download_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submission_id TEXT NOT NULL,
+                user_id TEXT,
+                file_type TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                downloaded_at TEXT NOT NULL,
+                client_ip TEXT,
+                user_agent TEXT
+            )
+            """
+        )
+        db.execute("CREATE INDEX IF NOT EXISTS idx_submissions_user_key ON submissions(user_key)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_download_events_submission ON download_events(submission_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_download_events_user ON download_events(user_id)")
 
 
 def db_row(query: str, params: tuple = ()) -> sqlite3.Row | None:
@@ -500,6 +536,74 @@ def normalize_contact(contact: str) -> str:
     return "".join(contact.split()).lower()
 
 
+def row_field(row: sqlite3.Row, name: str, default: str = "") -> str:
+    try:
+        value = row[name]
+    except (IndexError, KeyError):
+        return default
+    return default if value is None else str(value)
+
+
+def row_user_id(row: sqlite3.Row) -> str:
+    return row_field(row, "user_id") or row_field(row, "contact")
+
+
+def record_download(row: sqlite3.Row, file_type: str, actor_role: str, client_ip: str, user_agent: str) -> None:
+    if file_type not in {"pdf", "png"}:
+        return
+    db_execute(
+        """
+        INSERT INTO download_events (submission_id, user_id, file_type, actor_role, downloaded_at, client_ip, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            row["id"],
+            row_user_id(row),
+            file_type,
+            actor_role,
+            now_text(),
+            client_ip[:120],
+            user_agent[:260],
+        ),
+    )
+
+
+def download_record_html(submission_id: str) -> str:
+    summary = db_row(
+        """
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN file_type = 'pdf' THEN 1 ELSE 0 END) AS pdf_count,
+            SUM(CASE WHEN file_type = 'png' THEN 1 ELSE 0 END) AS png_count,
+            MAX(downloaded_at) AS last_downloaded_at
+        FROM download_events
+        WHERE submission_id = ? AND actor_role = 'player'
+        """,
+        (submission_id,),
+    )
+    total = int(summary["total"] or 0) if summary else 0
+    if total == 0:
+        return '<p class="download-record muted">下载纪录：暂无玩家下载</p>'
+    recent = db_rows(
+        """
+        SELECT file_type, downloaded_at
+        FROM download_events
+        WHERE submission_id = ? AND actor_role = 'player'
+        ORDER BY id DESC
+        LIMIT 3
+        """,
+        (submission_id,),
+    )
+    recent_text = " · ".join(f"{esc(item['downloaded_at'])} {esc(str(item['file_type']).upper())}" for item in recent)
+    detail = f'<span>{recent_text}</span>' if recent_text else ""
+    return (
+        f'<p class="download-record"><b>下载纪录：</b>共 {total} 次 · '
+        f'PDF {int(summary["pdf_count"] or 0)} · PNG {int(summary["png_count"] or 0)} · '
+        f'最近 {esc(summary["last_downloaded_at"])}</p>'
+        f'<p class="download-record compact">{detail}</p>'
+    )
+
+
 def layout(title: str, body: str, admin: bool = False, body_class: str = "") -> bytes:
     nav_links = ""
     if admin:
@@ -572,7 +676,7 @@ def public_page(message: str = "") -> bytes:
       <span>01</span>
       <h2>上传自证</h2>
     </div>
-    <label>小红书号或邮箱
+    <label>用户ID（小红书号或邮箱）
       <input name="contact" maxlength="80" placeholder="请输入小红书号或邮箱" required>
     </label>
     <label>自证文件
@@ -796,7 +900,7 @@ def submitted_page(submission_id: str) -> bytes:
     <div class="confirm-copy">
       <dl class="meta compact">
         <div><dt>提交时间</dt><dd>{esc(row['created_at'])}</dd></div>
-        <div><dt>联系方式</dt><dd>{esc(row['contact'])}</dd></div>
+        <div><dt>用户ID</dt><dd>{esc(row_user_id(row))}</dd></div>
         <div><dt>文件名</dt><dd>{esc(row['original_filename'])}</dd></div>
       </dl>
       <div class="confirm-actions">
@@ -970,7 +1074,7 @@ def status_page(submission_id: str) -> bytes:
   </div>
   <dl class="meta">
     <div><dt>提交时间</dt><dd>{esc(row['created_at'])}</dd></div>
-    <div><dt>联系方式</dt><dd>{esc(row['contact']) or "未填写"}</dd></div>
+    <div><dt>用户ID</dt><dd>{esc(row_user_id(row)) or "未填写"}</dd></div>
     <div><dt>文件名</dt><dd>{esc(row['original_filename'])}</dd></div>
   </dl>
   {note}
@@ -1000,7 +1104,13 @@ def admin_page() -> bytes:
 """
         generated = ""
         if row["pdf_filename"]:
-            generated = f'<a href="/download?id={esc(row["id"])}&type=pdf">PDF</a>'
+            generated = (
+                f'<span class="generated-links">文件：'
+                f'<a href="/view?id={esc(row["id"])}&type=pdf" target="_blank" rel="noopener">PDF</a> '
+                f'<a href="/view?id={esc(row["id"])}&type=png" target="_blank" rel="noopener">PNG</a>'
+                f'</span>'
+            )
+        download_record = download_record_html(row["id"]) if row["pdf_filename"] else ""
         cards.append(
             f"""
 <article class="submission">
@@ -1008,8 +1118,9 @@ def admin_page() -> bytes:
     <h3>{esc(row['id'])}</h3>
     {status_badge(row['status'])}
   </div>
-  <p>{esc(row['created_at'])} · {esc(row['contact']) or "无备注"}</p>
+  <p>{esc(row['created_at'])} · 用户ID：{esc(row_user_id(row)) or "未填写"}</p>
   <p><a href="{proof_link}">{esc(row['original_filename'])}</a> {generated}</p>
+  {download_record}
   {actions}
 </article>
 """
@@ -1092,6 +1203,17 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             return True
         self.redirect("/")
         return False
+
+    def client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",", 1)[0].strip()
+        return self.client_address[0] if self.client_address else ""
+
+    def download_actor_role(self) -> str:
+        if self.is_player():
+            return "player"
+        return "admin" if self.is_admin() else "unknown"
 
     def serve_path(self, path: Path, download_name: str | None = None) -> None:
         if not path.exists() or not path.is_file():
@@ -1194,9 +1316,23 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if kind == "png" and row["png_filename"]:
-                self.serve_path(GENERATED_DIR / row["png_filename"], Path(row["png_filename"]).name)
+                path = GENERATED_DIR / row["png_filename"]
+                if not path.exists():
+                    self.send_error(404)
+                    return
+                role = self.download_actor_role()
+                if role == "player":
+                    record_download(row, "png", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                self.serve_path(path, Path(row["png_filename"]).name)
             elif kind == "pdf" and row["pdf_filename"]:
-                self.serve_path(GENERATED_DIR / row["pdf_filename"], Path(row["pdf_filename"]).name)
+                path = GENERATED_DIR / row["pdf_filename"]
+                if not path.exists():
+                    self.send_error(404)
+                    return
+                role = self.download_actor_role()
+                if role == "player":
+                    record_download(row, "pdf", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                self.serve_path(path, Path(row["pdf_filename"]).name)
             else:
                 self.send_error(404)
         elif parsed.path == "/address-suggest":
@@ -1287,10 +1423,11 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             duplicate = db_row(
                 """
                 SELECT id FROM submissions
-                WHERE LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), '')) = ?
+                WHERE user_key = ?
+                   OR LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), '')) = ?
                 LIMIT 1
                 """,
-                (contact_key,),
+                (contact_key, contact_key),
             )
             if duplicate is not None:
                 self.send_html(public_page("这个小红书号或邮箱已经提交过自证。请使用第一次保存的提交编号查询审核进度。"), 400)
@@ -1303,10 +1440,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 shutil.copyfileobj(proof.file, f)
             db_execute(
                 """
-                INSERT INTO submissions (id, created_at, status, contact, original_filename, stored_filename)
-                VALUES (?, ?, 'pending', ?, ?, ?)
+                INSERT INTO submissions (id, created_at, status, contact, user_id, user_key, original_filename, stored_filename)
+                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
                 """,
-                (submission_id, now_text(), contact, original, stored),
+                (submission_id, now_text(), contact, contact, contact_key, original, stored),
             )
             self.redirect(f"/submitted?id={submission_id}")
         elif parsed.path == "/admin/login":
