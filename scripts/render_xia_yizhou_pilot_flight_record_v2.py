@@ -8,6 +8,8 @@ import random
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "outputs" / "xia_yizhou_613_pilot_flight_record_v2.png"
 CHINESE_SIGNATURE_ASSET = ROOT / "assets" / "xia_yizhou_chinese_signature.png"
+ID_PHOTO_ASSET = ROOT / "assets" / "xia_yizhou_id_photo.jpg"
+FLEET_STAMP_ASSET = ROOT / "assets" / "farspace_fleet_stamp_mask.png"
 COORD_CODE = ".1263 056 8 6 [0171]"
 
 W, H = 3000, 1900
@@ -141,14 +143,29 @@ def draw_grid(draw, box, step=58):
         draw.line((x1, y, x2, y), fill=(204, 197, 184, 92), width=1)
 
 
-def field(draw, x, y, w, label, value=None, blank=False):
+def field(
+    draw,
+    x,
+    y,
+    w,
+    label,
+    value=None,
+    blank=False,
+    line_offset=82,
+    line_width=3,
+    value_size=42,
+    value_min_size=22,
+    value_font_path=FONT_HEI,
+):
     draw.text((x, y), label, font=font(FONT_HEI_LIGHT, 23), fill=MUTED)
-    line_y = y + 82
-    draw.line((x, line_y, x + w, line_y), fill=LINE, width=3)
+    line_y = y + line_offset
+    draw.line((x, line_y, x + w, line_y), fill=LINE, width=line_width)
     if value:
-        draw.text((x + 8, y + 34), value, font=font(FONT_HEI, 42), fill=INK)
+        value_font = fit_font(value_font_path, value, w - 16, value_size, value_min_size)
+        bbox = draw.textbbox((0, 0), value, font=value_font)
+        draw.text((x + 8, line_y - bbox[3] - 3), value, font=value_font, fill=INK)
     if blank:
-        draw.text((x + 8, y + 34), "写下你的名字", font=font(FONT_HEI_LIGHT, 36), fill=(82, 101, 94, 150))
+        return
 
 
 def checkbox(draw, x, y, text, checked=True):
@@ -287,6 +304,52 @@ def paste_chinese_signature(canvas, x, y, width=322, opacity=0.82):
     draw.text((x, y), "夏以昼", font=font(FONT_HEI_LIGHT, 92), fill=(39, 42, 45, int(220 * opacity)))
 
 
+def paste_id_photo(canvas, x, y, width=260, height=340):
+    if not ID_PHOTO_ASSET.exists():
+        return
+    pad = 10
+    layer = Image.new("RGBA", (width + pad * 2, height + pad * 2), (246, 241, 230, 0))
+    d = ImageDraw.Draw(layer, "RGBA")
+    d.rectangle((0, 0, layer.width - 1, layer.height - 1), fill=(247, 241, 230, 238), outline=LINE + (230,), width=3)
+    d.rectangle((pad - 1, pad - 1, pad + width, pad + height), outline=(255, 255, 255, 235), width=3)
+
+    photo = Image.open(ID_PHOTO_ASSET).convert("RGBA")
+    photo.thumbnail((width, height), Image.Resampling.LANCZOS)
+    photo_x = pad + (width - photo.width) // 2
+    photo_y = pad + (height - photo.height) // 2
+    d.rectangle((pad, pad, pad + width, pad + height), fill=HEADER + (246,))
+    layer.alpha_composite(photo, (photo_x, photo_y))
+    canvas.alpha_composite(layer, (int(x), int(y)))
+
+
+def paste_emboss_stamp(canvas, x, y, width=126, opacity=0.78):
+    if not FLEET_STAMP_ASSET.exists():
+        return
+    stamp = Image.open(FLEET_STAMP_ASSET).convert("RGBA")
+    bbox = stamp.getbbox()
+    if bbox:
+        stamp = stamp.crop(bbox)
+    ratio = width / stamp.width
+    stamp = stamp.resize((width, max(1, int(stamp.height * ratio))), Image.Resampling.LANCZOS)
+    alpha = stamp.getchannel("A").point(lambda a: int(a * opacity))
+    margin = 10
+    layer = Image.new("RGBA", (stamp.width + margin * 2, stamp.height + margin * 2), (0, 0, 0, 0))
+
+    def add_pass(offset, color, scale, blur=0):
+        mask = alpha.point(lambda a: int(a * scale))
+        if blur:
+            mask = mask.filter(ImageFilter.GaussianBlur(blur))
+        color_layer = Image.new("RGBA", mask.size, color)
+        color_layer.putalpha(mask)
+        layer.alpha_composite(color_layer, (margin + offset[0], margin + offset[1]))
+
+    add_pass((3, 3), (92, 98, 90, 255), 0.34, 0.45)
+    add_pass((-2, -2), (255, 252, 238, 255), 0.56, 0.35)
+    add_pass((0, 0), (174, 178, 164, 255), 0.22, 0)
+    add_pass((1, 1), (128, 134, 123, 255), 0.16, 0)
+    canvas.alpha_composite(layer, (int(x - margin), int(y - margin)))
+
+
 def draw_route_map(draw, box, coord_code=COORD_CODE):
     x1, y1, x2, y2 = box
     dark = (24, 30, 39)
@@ -294,7 +357,7 @@ def draw_route_map(draw, box, coord_code=COORD_CODE):
     star = (238, 220, 167)
     draw.rectangle(box, fill=dark + (255,), outline=LINE, width=4)
     draw.text((x1 + 34, y1 + 28), "INTERSTELLAR COORDINATE MAP", font=font(FONT_TIMES_BOLD, 30), fill=(246, 241, 228))
-    confirmed = "DESTINATION CONFIRMED"
+    confirmed = "TARGET CONFIRMED"
     confirmed_font = fit_font(FONT_TIMES_BOLD, confirmed, 260, 22, 16)
     confirmed_box = draw.textbbox((0, 0), confirmed, font=confirmed_font)
     confirmed_w = confirmed_box[2] - confirmed_box[0]
@@ -338,7 +401,7 @@ def draw_route_map(draw, box, coord_code=COORD_CODE):
         px = worm_x + math.cos(rad) * 150
         py = worm_y + math.sin(rad) * 74
         draw.line((worm_x, worm_y, px, py), fill=ORANGE + (75,), width=2)
-    vector_label = "FIXED DESTINATION VECTOR"
+    vector_label = "FIXED TARGET VECTOR"
     vector_font = fit_font(FONT_TIMES_BOLD, vector_label, 260, 20, 16)
     vector_box = draw.textbbox((0, 0), vector_label, font=vector_font)
     vector_w = vector_box[2] - vector_box[0]
@@ -470,7 +533,7 @@ def draw_instrument(draw, cx, cy, r, label, value):
     draw.text((cx - r + 24, cy + 24), label, font=font(FONT_TIMES, 22), fill=MUTED)
 
 
-def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_path=OUT, pdf_path=None):
+def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_path=OUT, pdf_path=None, show_callsign=False):
     destination_name = (destination_name or "").strip()
     destination_coordinate = (destination_coordinate or COORD_CODE).strip()
     out_path = Path(out_path)
@@ -499,41 +562,70 @@ def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_
     draw.rectangle((x1 + 72, y1 + 34, x1 + 92, y1 + 164), fill=ORANGE + (230,))
     draw.text((x1 + 72, y1 + 48), "PILOT FLIGHT RECORD", font=font(FONT_TIMES_BOLD, 58), fill=(248, 249, 238))
     draw.text((x1 + 76, y1 + 122), "飞行纪录", font=font(FONT_HEI_LIGHT, 36), fill=(217, 224, 211))
+    if show_callsign:
+        callsign = "CALEB"
+        callsign_font = font(FONT_TIMES_BOLD, 52)
+        callsign_box = draw.textbbox((0, 0), callsign, font=callsign_font)
+        callsign_x = x2 - 94 - (callsign_box[2] - callsign_box[0])
+        draw.text((callsign_x, y1 + 74), callsign, font=callsign_font, fill=(248, 249, 238))
     body_top = y1 + 260
     field(draw, x1 + 76, body_top, 470, "PILOT / 飞行员", "CALEB / 夏以昼")
     field(draw, x1 + 620, body_top, 360, "AIRCRAFT MODEL / 飞机型号", "FY26")
     field(draw, x1 + 1055, body_top, 420, "LOG NO. / 记录编号", "00100011100110111")
     field(draw, x1 + 1550, body_top, 360, "DATE / 日期", "6/13")
-    field(draw, x1 + 1985, body_top, 565, "MISSION / 任务", "RETURN / 返航")
 
     dest_y = body_top + 140
-    draw.text((x1 + 76, dest_y), "DESTINATION / 目的地", font=font(FONT_HEI, 42), fill=INK)
-    name_line_y = dest_y + 136
-    name_x1 = x1 + 76
-    name_x2 = x1 + 1130
-    draw.line((name_x1, name_line_y, name_x2, name_line_y), fill=LINE, width=4)
-    if destination_name:
-        name_font = fit_font(FONT_HEI, destination_name, name_x2 - name_x1 - 24, 48, 24)
-        name_bbox = draw.textbbox((0, 0), destination_name, font=name_font)
-        text_x = name_x1 + 10
-        text_y = name_line_y - name_bbox[3] - 22
-        draw.text((text_x, text_y), destination_name, font=name_font, fill=INK)
+    mission_x1 = x1 + 76
+    mission_x2 = x1 + 510
+    field(
+        draw,
+        mission_x1,
+        dest_y + 12,
+        mission_x2 - mission_x1,
+        "MISSION / 任务",
+        "RETURN / 返航",
+        line_offset=124,
+        line_width=4,
+        value_size=42,
+    )
+
+    name_x1 = x1 + 590
+    name_x2 = x1 + 1680
+    field(
+        draw,
+        name_x1,
+        dest_y + 12,
+        name_x2 - name_x1,
+        "MISSION TARGET / 任务目标",
+        destination_name if destination_name else None,
+        blank=not destination_name,
+        line_offset=124,
+        line_width=4,
+        value_size=48,
+        value_min_size=24,
+    )
 
     map_box = (x1 + 76, dest_y + 210, x1 + 1680, dest_y + 820)
     draw_route_map(draw, map_box, destination_coordinate)
 
     side_x = x1 + 1745
-    panel_box = (side_x, dest_y + 210, x2 - 76, dest_y + 820)
+    panel_top = dest_y + 24
+    panel_bottom = dest_y + 820
+    panel_box = (side_x, panel_top, x2 - 76, panel_bottom)
     draw.rectangle(panel_box, fill=(244, 245, 236, 122), outline=LINE, width=4)
-    draw.text((side_x + 34, dest_y + 236), "RECORD REVIEW / 记录审核", font=font(FONT_HEI, 31), fill=INK)
-    checkbox(draw, side_x + 38, dest_y + 304, "COORDINATE LOGGED", True)
-    checkbox(draw, side_x + 38, dest_y + 360, "ROUTE TRACE FILED", True)
-    checkbox(draw, side_x + 38, dest_y + 416, "CHECKPOINT RECORDED", True)
-    checkbox(draw, side_x + 38, dest_y + 472, "SIGNATURE FILED", True)
-    draw.line((side_x + 34, dest_y + 528, x2 - 110, dest_y + 528), fill=LIGHT, width=3)
+    draw.text((side_x + 34, panel_top + 34), "RECORD REVIEW / 记录审核", font=font(FONT_HEI, 31), fill=INK)
+    photo_slot_x = side_x + 550
+    photo_outer_w = 240 + 20
+    photo_x = photo_slot_x + ((x2 - 110) - photo_slot_x - photo_outer_w) // 2
+    paste_id_photo(canvas, photo_x, panel_top + 28, width=240, height=320)
+    checkbox(draw, side_x + 38, panel_top + 106, "COORDINATE LOGGED", True)
+    checkbox(draw, side_x + 38, panel_top + 162, "ROUTE TRACE FILED", True)
+    checkbox(draw, side_x + 38, panel_top + 218, "CHECKPOINT RECORDED", True)
+    checkbox(draw, side_x + 38, panel_top + 274, "SIGNATURE FILED", True)
+    draw.line((side_x + 34, panel_top + 392, x2 - 110, panel_top + 392), fill=LIGHT, width=3)
 
     data_x = side_x + 38
-    data_y = dest_y + 560
+    data_y = panel_top + 482
     data_w = 390
     draw.text((data_x, data_y), "ATTACHMENTS", font=font(FONT_TIMES_BOLD, 24), fill=MUTED)
     rows = [("MAP", "COORDINATE"), ("LOG", "FLIGHT ENTRY"), ("SIGN", "ARCHIVED")]
@@ -543,12 +635,16 @@ def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_
         draw.text((data_x + 178, y - 4), value, font=font(FONT_TIMES_BOLD, 31), fill=INK)
         draw.line((data_x, y + 35, data_x + data_w, y + 35), fill=LIGHT, width=2)
 
-    draw.text((side_x + 585, dest_y + 548), "SIGNATURE", font=font(FONT_TIMES_BOLD, 24), fill=MUTED)
-    draw.line((side_x + 555, dest_y + 738, x2 - 118, dest_y + 738), fill=LINE, width=3)
-    paste_chinese_signature(canvas, side_x + 520, dest_y + 590, width=330, opacity=0.83)
+    stamp_w = 440
+    stamp_x = x2 - 98 - stamp_w
+    stamp_y = panel_top + 666
+    draw.text((side_x + 585, panel_top + 470), "SIGNATURE", font=font(FONT_TIMES_BOLD, 24), fill=MUTED)
+    draw.line((side_x + 555, panel_top + 660, x2 - 118, panel_top + 660), fill=LINE, width=3)
+    paste_chinese_signature(canvas, side_x + 520, panel_top + 512, width=330, opacity=0.83)
 
     table_box = (x1 + 76, y2 - 460, x2 - 76, y2 - 70)
     draw_table(draw, table_box)
+    paste_emboss_stamp(canvas, stamp_x, stamp_y, width=stamp_w, opacity=0.58)
 
     footer = "PILOT RECORD SEALED."
     footer_font = font(FONT_TIMES, 24)
@@ -578,12 +674,14 @@ def main():
     parser.add_argument("--destination-coordinate", default=COORD_CODE, help="Destination coordinate string.")
     parser.add_argument("--output", default=str(OUT), help="PNG output path.")
     parser.add_argument("--pdf", default="", help="Optional PDF output path.")
+    parser.add_argument("--show-callsign", action="store_true", help="Show the standalone CALEB header label.")
     args = parser.parse_args()
     output = generate_record(
         destination_name=args.destination_name,
         destination_coordinate=args.destination_coordinate,
         out_path=args.output,
         pdf_path=args.pdf or None,
+        show_callsign=args.show_callsign,
     )
     print(output)
 

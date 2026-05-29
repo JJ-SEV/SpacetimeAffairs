@@ -637,6 +637,7 @@ def regenerate_record_files(row: sqlite3.Row, force: bool = False) -> bool:
             destination_coordinate=row["destination_coordinate"],
             out_path=png_path,
             pdf_path=pdf_path,
+            show_callsign=True,
         )
     except Exception as exc:
         print(f"Failed to regenerate files for {row['id']}: {exc}", file=sys.stderr)
@@ -764,7 +765,7 @@ def public_page(message: str = "") -> bytes:
     <span></span>
   </div>
   <div class="mission-copy">
-    <p class="eyebrow">DESTINATION CLEARANCE</p>
+    <p class="eyebrow">TARGET CLEARANCE</p>
     <h2>飞行纪录签发控制台</h2>
   </div>
   <div class="signal-grid">
@@ -965,7 +966,7 @@ def player_loading_page() -> bytes:
     <p class="eyebrow">ACCESS GRANTED</p>
     <h1>同步飞行通道</h1>
     <div class="loading-bar" aria-hidden="true"><span></span></div>
-    <p class="loading-copy">正在建立目的地链路</p>
+    <p class="loading-copy">正在建立任务目标链路</p>
     <a class="button ghost loading-fallback" href="/">进入控制台</a>
   </section>
 </main>
@@ -1084,10 +1085,10 @@ def status_page(submission_id: str) -> bytes:
   <input type="hidden" name="id" value="{esc(row['id'])}">
   <div class="section-head">
     <span>03</span>
-    <h2>填写目的地</h2>
+    <h2>填写任务目标</h2>
   </div>
-  <label>目的地名字
-    <input name="destination_name" maxlength="24" placeholder="会写在 DESTINATION / 目的地 下方" required>
+  <label>任务目标名字
+    <input name="destination_name" maxlength="24" placeholder="会写在 MISSION TARGET / 任务目标 下方" required>
   </label>
   <label class="address-field">地址（可选）
     <input name="address" class="address-input" maxlength="160" placeholder="可输入城市、区县、道路；不填则随机生成专属坐标" autocomplete="off">
@@ -1099,7 +1100,7 @@ def status_page(submission_id: str) -> bytes:
   </label>
   <div class="commit-row">
     <button type="submit">确认生成飞行纪录</button>
-    <p class="commit-warning"><b>请确认信息</b><span>一个账号只能生成一次，生成后不可修改目的地。</span></p>
+    <p class="commit-warning"><b>请确认信息</b><span>一个账号只能生成一次，生成后不可修改任务目标。</span></p>
   </div>
 </form>
 <script>
@@ -1202,7 +1203,7 @@ def status_page(submission_id: str) -> bytes:
     <span>04</span>
     <h2>最终文件</h2>
   </div>
-  <p><b>目的地：</b>{esc(row['destination_name'])}</p>
+  <p><b>任务目标：</b>{esc(row['destination_name'])}</p>
   <p><b>目的地坐标：</b>{esc(row['destination_coordinate'])}</p>
   <figure class="record-preview-frame" id="record-preview">
     <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
@@ -1710,6 +1711,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 destination_coordinate=coord,
                 out_path=GENERATED_DIR / png_name,
                 pdf_path=GENERATED_DIR / pdf_name,
+                show_callsign=True,
             )
             db_execute(
                 """
