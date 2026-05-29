@@ -1085,22 +1085,22 @@ def status_page(submission_id: str) -> bytes:
   <input type="hidden" name="id" value="{esc(row['id'])}">
   <div class="section-head">
     <span>03</span>
-    <h2>填写任务目标</h2>
+    <h2>规划飞行航道</h2>
   </div>
-  <label>任务目标名字
-    <input name="destination_name" maxlength="24" placeholder="会写在 MISSION TARGET / 任务目标 下方" required>
+  <label>姓名
+    <input name="destination_name" maxlength="24" required>
   </label>
-  <label class="address-field">地址（可选）
-    <input name="address" class="address-input" maxlength="160" placeholder="可输入城市、区县、道路；不填则随机生成专属坐标" autocomplete="off">
+  <label class="address-field">地址
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位，生成专属坐标" autocomplete="off">
     <input type="hidden" name="address_lat" class="address-lat">
     <input type="hidden" name="address_lon" class="address-lon">
     <input type="hidden" name="address_label" class="address-label">
-    <span class="field-hint address-hint">输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址也可以直接随机生成专属坐标。</span>
+    <span class="field-hint address-hint">输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。</span>
     <div class="address-suggest" hidden></div>
   </label>
   <div class="commit-row">
-    <button type="submit">确认生成飞行纪录</button>
-    <p class="commit-warning"><b>请确认信息</b><span>一个账号只能生成一次，生成后不可修改任务目标。</span></p>
+    <button type="submit">确认任务部署</button>
+    <p class="commit-warning"><b>请确认信息</b><span>确认后无法撤回修改。</span></p>
   </div>
 </form>
 <script>
@@ -1121,7 +1121,7 @@ def status_page(submission_id: str) -> bytes:
     lon.value = "";
     label.value = "";
     input.classList.remove("has-location");
-    hint.textContent = "输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址也可以直接随机生成专属坐标。";
+    hint.textContent = "输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。";
   }}
 
   function hideSuggest() {{
