@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY flight_record_site ./flight_record_site
 COPY scripts/render_xia_yizhou_pilot_flight_record_v2.py ./scripts/render_xia_yizhou_pilot_flight_record_v2.py
 COPY assets/xia_yizhou_chinese_signature.png ./assets/xia_yizhou_chinese_signature.png
+COPY assets/xia_yizhou_id_photo.jpg ./assets/xia_yizhou_id_photo.jpg
+COPY assets/farspace_fleet_stamp_mask.png ./assets/farspace_fleet_stamp_mask.png
 
 EXPOSE 8787
 
