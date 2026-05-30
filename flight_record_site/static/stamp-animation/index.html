@@ -1699,6 +1699,7 @@
   <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a" preload="auto"></audio>
   <audio id="device-ambience" src="assets/device-ambience.m4a" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
+  <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
     <section class="audio-gate-card">
@@ -1799,14 +1800,15 @@
     const signalAudio = document.querySelector("#xia-signal");
     const deviceAudio = document.querySelector("#device-ambience");
     const alarmAudio = document.querySelector("#alarm-sound");
+    const errorPromptAudio = document.querySelector("#error-prompt");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const mediaElements = [signalAudio, deviceAudio, alarmAudio, electricGlitchAudio];
+    const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorPromptAudio, electricGlitchAudio];
     const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
     const stampDuration = 6500;
     const alarmDuration = 3000;
-    const errorVoiceDuration = 2700;
+    const errorVoiceDuration = 3300;
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
     const blackboxAudioDuration = 8640;
@@ -1814,10 +1816,10 @@
     const grantedDuration = 2200;
     const MIX = Object.freeze({
       alarm: 0.018,
-      errorVoice: 0.42,
-      electricGlitch: 0.2,
-      blackboxVoice: 0.72,
-      deviceAmbience: 0.025,
+      errorVoice: 0.82,
+      electricGlitch: 0.16,
+      blackboxVoice: 0.82,
+      deviceAmbience: 0,
       scannerNoise: 0.12,
       scannerServo: 0.046,
       stampThump: 0.16,
@@ -1827,7 +1829,8 @@
       crackleNoise: 0.018,
       crackleSpark: 0.014,
       crackleSparkRange: 0.024,
-      stuckVoice: 0.09
+      stuckVoice: 0.14,
+      signalHighCutDb: -18
     });
     let audioCtx = null;
     let soundReady = false;
@@ -1838,6 +1841,7 @@
     let errorStartTime = 0;
     let errorSparks = [];
     let criticalAssetsReady = null;
+    let signalRouteReady = false;
 
     function setGateContent(title, copy, status, ready) {
       if (gateTitle) gateTitle.textContent = title;
@@ -2238,8 +2242,8 @@
       const now = audioCtx.currentTime;
       playErrorSyllable(now + .08, 230);
       playErrorSyllable(now + .82, 212);
-      playErrorStuckTone(now + 1.42, 1.18);
-      playElectricCrackle(1.2);
+      playErrorStuckTone(now + 1.58, 1.35);
+      playElectricCrackle(1.55);
     }
 
     function playUnlockTone() {
@@ -2318,10 +2322,8 @@
     }
 
     function playErrorPrompt(runId) {
-      if (soundReady) {
-        playErrorPromptSound();
-      }
-      return wait(errorVoiceDuration, runId);
+      const fallback = () => playErrorPromptSound();
+      return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration, fallback);
     }
 
     async function playWarningAudioSequence(runId) {
@@ -2343,7 +2345,7 @@
     }
 
     async function startDeviceAmbience() {
-      if (!soundReady) return () => {};
+      if (!soundReady || MIX.deviceAmbience <= 0) return () => {};
       deviceAudio.pause();
       deviceAudio.currentTime = 0;
       deviceAudio.volume = MIX.deviceAmbience;
@@ -2358,12 +2360,32 @@
       };
     }
 
+    function routeSignalAudio() {
+      if (!audioCtx || signalRouteReady || !audioCtx.createMediaElementSource) return;
+      try {
+        const source = audioCtx.createMediaElementSource(signalAudio);
+        const shelf = audioCtx.createBiquadFilter();
+        const output = audioCtx.createGain();
+        shelf.type = "highshelf";
+        shelf.frequency.value = 1800;
+        shelf.gain.value = MIX.signalHighCutDb;
+        output.gain.value = 1;
+        source.connect(shelf);
+        shelf.connect(output);
+        output.connect(audioCtx.destination);
+        signalRouteReady = true;
+      } catch (error) {
+        console.warn("Signal route failed", error && (error.name || error.message || error));
+      }
+    }
+
     async function unlockSound() {
       let contextReady = false;
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         await audioCtx.resume();
         contextReady = audioCtx.state === "running";
+        routeSignalAudio();
         playUnlockTone();
       } catch (error) {
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
