@@ -17,6 +17,11 @@
 
     * { box-sizing: border-box; }
 
+    html {
+      overflow: hidden;
+      background: var(--bg);
+    }
+
     body {
       min-height: 100vh;
       margin: 0;
@@ -853,12 +858,13 @@
         radial-gradient(circle at 48% 46%, rgba(101,213,255,.055), transparent 32%),
         radial-gradient(circle at 52% 50%, rgba(255,159,69,.04), transparent 46%),
         #000;
+      overflow: hidden;
     }
 
     .blackout::before {
-      opacity: .32;
+      opacity: .46;
       background:
-        repeating-linear-gradient(0deg, rgba(255,255,255,.075) 0 1px, transparent 1px 5px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 1px, transparent 1px 4px),
         linear-gradient(90deg, rgba(101,213,255,.08), transparent 42%, rgba(255,159,69,.08)),
         radial-gradient(circle at 50% 48%, rgba(238,239,224,.06), transparent 42%);
       mix-blend-mode: screen;
@@ -873,85 +879,207 @@
         linear-gradient(90deg, rgba(255,159,69,.055), transparent 45%, rgba(101,213,255,.06));
     }
 
+    .blackbox-bg,
+    .access-gate-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .blackbox-bg {
+      opacity: 0;
+      filter: brightness(.78) contrast(1.24) saturate(1.05);
+      transform: scale(1.04);
+      mix-blend-mode: screen;
+    }
+
+    body[data-phase="blackout"] .blackbox-bg {
+      animation: blackboxCodeFieldIn .86s cubic-bezier(.16,.78,.18,1) forwards, blackboxCodeFieldDrift 4.8s steps(5, end) .86s infinite;
+    }
+
     body[data-phase="blackout"] .blackout {
       animation: blackboxSignalIn .78s cubic-bezier(.16,.78,.18,1) forwards;
     }
 
     .access-granted {
-      background:
-        radial-gradient(circle at 50% 42%, rgba(130,255,210,.16), transparent 32%),
-        linear-gradient(rgba(101,213,255,.055) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(101,213,255,.045) 1px, transparent 1px),
-        #02080c;
-      background-size: auto, 38px 38px, 38px 38px, auto;
+      overflow: hidden;
+      background: #02080c;
       pointer-events: none;
     }
 
     body[data-phase="granted"] .access-granted {
-      animation: accessWash 2.2s cubic-bezier(.18,.72,.22,1) forwards;
+      animation: accessWash 3.2s cubic-bezier(.18,.72,.22,1) forwards;
     }
 
     .access-granted::before {
       background:
-        radial-gradient(circle at 50% 44%, rgba(255,159,69,.24), transparent 26%),
-        linear-gradient(90deg, rgba(255,159,69,.18), transparent 48%, rgba(101,213,255,.16));
+        radial-gradient(circle at 50% 50%, rgba(255,44,44,.3), transparent 25%),
+        linear-gradient(90deg, rgba(255,44,44,.24), transparent 46%, rgba(77,255,154,.2));
+      mix-blend-mode: screen;
+    }
+
+    .access-granted::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .34;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.09) 0 1px, transparent 1px 5px),
+        radial-gradient(ellipse at 50% 50%, transparent 0 30%, rgba(0,0,0,.46) 66%, rgba(0,0,0,.92) 100%);
       mix-blend-mode: screen;
     }
 
     body[data-phase="granted"] .access-granted::before {
-      animation: accessRedToGreen 2.2s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessRedToGreen 3.2s cubic-bezier(.2,.76,.18,1) forwards;
+    }
+
+    body[data-phase="granted"] .access-granted::after {
+      animation: accessScanlineShift 3.2s steps(6, end) forwards;
+    }
+
+    .access-gate-bg {
+      opacity: 0;
+      filter: brightness(.58) saturate(1.34) contrast(1.16);
+      transform: scale(1.08);
+    }
+
+    body[data-phase="granted"] .access-gate-bg {
+      animation: accessGateImageIn 3.2s cubic-bezier(.18,.76,.18,1) forwards;
     }
 
     .access-panel {
       position: relative;
-      z-index: 1;
-      width: min(680px, calc(100vw - 44px));
-      border: 1px solid rgba(130,255,210,.48);
+      z-index: 2;
+      width: min(620px, calc(100vw - 44px));
+      border: 1px solid rgba(255,69,69,.7);
       background:
-        linear-gradient(180deg, rgba(8,30,28,.86), rgba(2,8,12,.94)),
-        linear-gradient(90deg, transparent, rgba(130,255,210,.08), transparent);
-      box-shadow: 0 0 90px rgba(130,255,210,.18), inset 0 1px 0 rgba(255,255,255,.08);
+        linear-gradient(180deg, rgba(28,6,6,.72), rgba(2,8,12,.84)),
+        linear-gradient(90deg, transparent, rgba(255,69,69,.12), transparent);
+      box-shadow: 0 0 90px rgba(255,69,69,.24), inset 0 1px 0 rgba(255,255,255,.08);
       padding: clamp(26px, 5vw, 44px);
+      text-align: center;
+      backdrop-filter: blur(4px);
     }
 
     body[data-phase="granted"] .access-panel {
-      animation: accessPanelShift 2.2s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessPanelShift 3.2s cubic-bezier(.2,.76,.18,1) forwards;
     }
 
     .access-panel b {
+      position: relative;
       display: block;
-      color: var(--mint);
-      font-size: 12px;
+      color: #ff4747;
+      font-size: clamp(14px, 2vw, 18px);
       font-weight: 900;
       text-transform: uppercase;
+      letter-spacing: 0;
+      text-shadow: 0 0 24px rgba(255,69,69,.62);
     }
 
     .access-panel strong {
+      position: relative;
       display: block;
       margin-top: 12px;
-      color: #f3fffb;
+      color: #fff5f0;
       font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(38px, 7vw, 72px);
+      font-size: clamp(34px, 6.5vw, 66px);
       line-height: .95;
-      text-shadow: 0 0 24px rgba(130,255,210,.32);
+      text-shadow: 2px 0 rgba(101,213,255,.3), -2px 0 rgba(255,69,69,.72), 0 0 24px rgba(255,69,69,.36);
     }
 
     body[data-phase="granted"] .access-panel strong {
-      animation: accessTextShift 2.2s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessTextShift 3.2s cubic-bezier(.2,.76,.18,1) forwards;
     }
 
-    .access-panel span {
+    .access-note {
+      position: relative;
       display: block;
       margin-top: 16px;
       color: rgba(236,248,243,.64);
       font-size: 14px;
+      min-height: 1.5em;
+    }
+
+    .access-denied-copy,
+    .access-granted-copy,
+    .access-denied-note,
+    .access-granted-note {
+      display: block;
+      transition: none;
+    }
+
+    .access-granted-copy,
+    .access-granted-note {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .access-granted-copy {
+      color: var(--mint);
+      text-shadow: 0 0 24px rgba(130,255,210,.58);
+    }
+
+    .access-granted-note {
+      color: rgba(214,255,237,.76);
+    }
+
+    body[data-phase="granted"] .access-denied-copy,
+    body[data-phase="granted"] .access-denied-note {
+      animation: accessDeniedOut 3.2s steps(1, end) forwards;
+    }
+
+    body[data-phase="granted"] .access-granted-copy,
+    body[data-phase="granted"] .access-granted-note {
+      animation: accessGrantedIn 3.2s steps(1, end) forwards;
+    }
+
+    .access-gate-ring {
+      position: absolute;
+      z-index: 1;
+      left: 50%;
+      top: 50%;
+      width: min(86vw, 640px);
+      aspect-ratio: 1;
+      border: 1px solid rgba(255,69,69,.5);
+      border-radius: 50%;
+      box-shadow: 0 0 42px rgba(255,69,69,.24), inset 0 0 60px rgba(0,0,0,.62);
+      transform: translate(-50%, -50%) rotate(0deg) scale(.9);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .access-gate-ring::before,
+    .access-gate-ring::after {
+      content: "";
+      position: absolute;
+      inset: 10%;
+      border-radius: 50%;
+      border: 2px dashed rgba(255,69,69,.58);
+      box-shadow: inset 0 0 32px rgba(255,69,69,.12);
+    }
+
+    .access-gate-ring::after {
+      inset: 24%;
+      border-style: solid;
+      border-color: rgba(130,255,210,.22);
+    }
+
+    body[data-phase="granted"] .access-gate-ring {
+      animation: accessGateTurn 3.2s cubic-bezier(.18,.78,.18,1) forwards;
     }
 
     .access-loader {
       position: relative;
       height: 8px;
       margin-top: 28px;
-      border: 1px solid rgba(130,255,210,.34);
+      border: 1px solid rgba(255,69,69,.42);
       overflow: hidden;
       background: rgba(4,13,19,.8);
     }
@@ -962,33 +1090,34 @@
       inset: 0 auto 0 0;
       width: 100%;
       transform-origin: left;
-      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
-      box-shadow: 0 0 18px rgba(130,255,210,.54);
+      background: linear-gradient(90deg, #ff4545, #ff9f45, #82ffd2);
+      box-shadow: 0 0 18px rgba(255,69,69,.54);
     }
 
     body[data-phase="granted"] .access-loader::before {
-      animation: accessLoad 1.7s cubic-bezier(.2,.78,.2,1) forwards;
+      animation: accessLoad 3s cubic-bezier(.2,.78,.2,1) forwards;
     }
 
     .blackbox-window {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       width: min(640px, calc(100vw - 42px));
       border: 1px solid rgba(238,239,224,.5);
       border-radius: 4px;
       background:
-        linear-gradient(rgba(238,239,224,.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(101,213,255,.055) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(3,8,10,.92), rgba(2,5,7,.98));
+        linear-gradient(rgba(238,239,224,.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101,213,255,.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(3,8,10,.76), rgba(2,5,7,.9));
       background-size: 100% 18px, 42px 100%, auto;
       box-shadow:
         0 0 0 12px rgba(0,0,0,.62),
         0 0 0 14px rgba(238,239,224,.36),
-        0 0 80px rgba(101,213,255,.18),
+        0 0 80px rgba(101,213,255,.24),
         inset 0 1px 0 rgba(255,255,255,.08);
       color: rgba(236,248,243,.92);
       overflow: hidden;
       transform-origin: center;
+      backdrop-filter: blur(2px);
     }
 
     body[data-phase="blackout"] .blackbox-window {
@@ -1495,6 +1624,20 @@
       100% { transform: translate3d(0,0,0) scale(1.02); opacity: .34; }
     }
 
+    @keyframes blackboxCodeFieldIn {
+      0% { opacity: 0; transform: scale(1.12); filter: brightness(1.6) blur(12px) contrast(1.8); }
+      28% { opacity: .42; transform: scale(1.06); filter: brightness(.45) blur(2px) contrast(1.4); }
+      58%, 100% { opacity: .88; transform: scale(1.04); filter: brightness(.78) blur(0) contrast(1.24) saturate(1.05); }
+    }
+
+    @keyframes blackboxCodeFieldDrift {
+      0% { transform: translate3d(0,0,0) scale(1.04); clip-path: inset(0 0 0 0); }
+      22% { transform: translate3d(-8px,2px,0) scale(1.045); clip-path: inset(2% 0 0 0); }
+      46% { transform: translate3d(6px,-2px,0) scale(1.038); clip-path: inset(0 0 4% 0); }
+      72% { transform: translate3d(3px,3px,0) scale(1.044); clip-path: inset(0 2% 0 0); }
+      100% { transform: translate3d(0,0,0) scale(1.04); clip-path: inset(0 0 0 0); }
+    }
+
     @keyframes blackboxSignalIn {
       0%, 10% {
         opacity: 0;
@@ -1574,15 +1717,56 @@
     }
 
     @keyframes accessWash {
-      0% { background-color: #160b02; }
-      42% { background-color: #091014; }
+      0% { background-color: #170404; }
+      48% { background-color: #100809; }
+      62% { background-color: #06120d; }
       100% { background-color: #02080c; }
     }
 
     @keyframes accessRedToGreen {
-      0% { opacity: .78; filter: hue-rotate(0deg) saturate(1.4); transform: translateX(-18px); }
-      54% { opacity: .42; filter: hue-rotate(96deg) saturate(1.1); transform: translateX(8px); }
-      100% { opacity: .12; filter: hue-rotate(138deg) saturate(.9); transform: translateX(0); }
+      0%, 44% { opacity: .78; filter: hue-rotate(0deg) saturate(1.55); transform: translateX(-18px); }
+      58% { opacity: .48; filter: hue-rotate(74deg) saturate(1.28); transform: translateX(4px); }
+      100% { opacity: .28; filter: hue-rotate(122deg) saturate(1.12); transform: translateX(0); }
+    }
+
+    @keyframes accessScanlineShift {
+      0%, 44% { opacity: .42; transform: translateY(0); }
+      58% { opacity: .62; transform: translateY(9px); }
+      100% { opacity: .34; transform: translateY(-4px); }
+    }
+
+    @keyframes accessGateImageIn {
+      0% { opacity: 0; transform: scale(1.14); filter: brightness(.42) saturate(1.8) contrast(1.45) hue-rotate(-18deg); }
+      16%, 44% { opacity: .92; transform: scale(1.07); filter: brightness(.72) saturate(1.55) contrast(1.18) hue-rotate(-6deg); }
+      60% { opacity: .96; transform: scale(1.04); filter: brightness(.9) saturate(1.3) contrast(1.12) hue-rotate(42deg); }
+      100% { opacity: .9; transform: scale(1.02); filter: brightness(.86) saturate(1.12) contrast(1.08) hue-rotate(0deg); }
+    }
+
+    @keyframes accessGateTurn {
+      0% {
+        opacity: 0;
+        border-color: rgba(255,69,69,.5);
+        box-shadow: 0 0 42px rgba(255,69,69,.24), inset 0 0 60px rgba(0,0,0,.62);
+        transform: translate(-50%, -50%) rotate(0deg) scale(.82);
+      }
+      16%, 48% {
+        opacity: .92;
+        border-color: rgba(255,69,69,.58);
+        box-shadow: 0 0 56px rgba(255,69,69,.34), inset 0 0 64px rgba(0,0,0,.62);
+        transform: translate(-50%, -50%) rotate(148deg) scale(1);
+      }
+      62% {
+        opacity: 1;
+        border-color: rgba(130,255,210,.62);
+        box-shadow: 0 0 62px rgba(130,255,210,.28), inset 0 0 64px rgba(0,0,0,.58);
+        transform: translate(-50%, -50%) rotate(302deg) scale(1.03);
+      }
+      100% {
+        opacity: .62;
+        border-color: rgba(130,255,210,.42);
+        box-shadow: 0 0 44px rgba(130,255,210,.2), inset 0 0 60px rgba(0,0,0,.62);
+        transform: translate(-50%, -50%) rotate(360deg) scale(1);
+      }
     }
 
     @keyframes accessPanelShift {
@@ -1592,8 +1776,8 @@
         transform: translateY(4px);
       }
       45% {
-        border-color: rgba(255,159,69,.5);
-        box-shadow: 0 0 80px rgba(255,159,69,.12), inset 0 1px 0 rgba(255,255,255,.08);
+        border-color: rgba(255,69,69,.7);
+        box-shadow: 0 0 92px rgba(255,69,69,.22), inset 0 1px 0 rgba(255,255,255,.08);
       }
       100% {
         border-color: rgba(130,255,210,.48);
@@ -1604,17 +1788,27 @@
 
     @keyframes accessTextShift {
       0% {
-        color: #ffe2bd;
-        text-shadow: 2px 0 rgba(101,213,255,.42), -2px 0 rgba(255,159,69,.72), 0 0 24px rgba(255,159,69,.32);
+        color: #fff5f0;
+        text-shadow: 2px 0 rgba(101,213,255,.3), -2px 0 rgba(255,69,69,.72), 0 0 24px rgba(255,69,69,.36);
       }
-      45% {
+      45%, 58% {
         color: #fff3de;
-        text-shadow: 1px 0 rgba(101,213,255,.35), -1px 0 rgba(255,159,69,.5), 0 0 22px rgba(255,159,69,.22);
+        text-shadow: 1px 0 rgba(101,213,255,.35), -1px 0 rgba(255,69,69,.5), 0 0 22px rgba(255,69,69,.22);
       }
       100% {
         color: #f3fffb;
         text-shadow: 0 0 24px rgba(130,255,210,.32);
       }
+    }
+
+    @keyframes accessDeniedOut {
+      0%, 56% { opacity: 1; }
+      57%, 100% { opacity: 0; }
+    }
+
+    @keyframes accessGrantedIn {
+      0%, 56% { opacity: 0; }
+      57%, 100% { opacity: 1; }
     }
 
     @keyframes interferenceShift {
@@ -1758,6 +1952,7 @@
       </div>
     </section>
     <section class="blackout">
+      <img class="blackbox-bg" src="assets/ai-blackbox-code-glitch-bg-v1.png" alt="" loading="eager" decoding="async">
       <div class="blackbox-window">
         <div class="blackbox-head">Black Box Audio</div>
         <div class="blackbox-body">
@@ -1771,10 +1966,21 @@
       </div>
     </section>
     <section class="access-granted">
+      <img class="access-gate-bg" src="assets/ai-access-gate-v1.png" alt="" loading="eager" decoding="async">
+      <div class="access-gate-ring" aria-hidden="true"></div>
       <div class="access-panel">
-        <b>Signature Restored</b>
-        <strong>签发完成</strong>
-        <span>正在同步飞行纪录预览</span>
+        <b>
+          <span class="access-denied-copy">ACCESS DENIED</span>
+          <span class="access-granted-copy">ACCESS GRANTED</span>
+        </b>
+        <strong>
+          <span class="access-denied-copy">验证门拒绝通行</span>
+          <span class="access-granted-copy">签发完成</span>
+        </strong>
+        <span class="access-note">
+          <span class="access-denied-note">正在重新校验飞行签发权限</span>
+          <span class="access-granted-note">正在同步飞行纪录预览</span>
+        </span>
         <div class="access-loader" aria-hidden="true"></div>
       </div>
     </section>
@@ -1814,7 +2020,7 @@
     const electricGlitchDuration = 1450;
     const blackboxAudioDuration = 8640;
     const skipBlackboxDuration = 3200;
-    const grantedDuration = 2200;
+    const grantedDuration = 3200;
     const MIX = Object.freeze({
       alarm: 0.018,
       errorVoice: 0.86,
