@@ -533,7 +533,14 @@ def draw_instrument(draw, cx, cy, r, label, value):
     draw.text((cx - r + 24, cy + 24), label, font=font(FONT_TIMES, 22), fill=MUTED)
 
 
-def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_path=OUT, pdf_path=None, show_callsign=False):
+def generate_record(
+    destination_name="",
+    destination_coordinate=COORD_CODE,
+    out_path=OUT,
+    pdf_path=None,
+    show_callsign=False,
+    show_stamp=True,
+):
     destination_name = (destination_name or "").strip()
     destination_coordinate = (destination_coordinate or COORD_CODE).strip()
     out_path = Path(out_path)
@@ -644,12 +651,12 @@ def generate_record(destination_name="", destination_coordinate=COORD_CODE, out_
 
     table_box = (x1 + 76, y2 - 460, x2 - 76, y2 - 70)
     draw_table(draw, table_box)
-    paste_emboss_stamp(canvas, stamp_x, stamp_y, width=stamp_w, opacity=0.58)
-
-    footer = "PILOT RECORD SEALED."
-    footer_font = font(FONT_TIMES, 24)
-    footer_w = draw.textbbox((0, 0), footer, font=footer_font)[2]
-    draw.text((x2 - 76 - footer_w, y2 - 40), footer, font=footer_font, fill=MUTED)
+    if show_stamp:
+        paste_emboss_stamp(canvas, stamp_x, stamp_y, width=stamp_w, opacity=0.58)
+        footer = "PILOT RECORD SEALED."
+        footer_font = font(FONT_TIMES, 24)
+        footer_w = draw.textbbox((0, 0), footer, font=footer_font)[2]
+        draw.text((x2 - 76 - footer_w, y2 - 40), footer, font=footer_font, fill=MUTED)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     outer_trim = 7
@@ -675,6 +682,7 @@ def main():
     parser.add_argument("--output", default=str(OUT), help="PNG output path.")
     parser.add_argument("--pdf", default="", help="Optional PDF output path.")
     parser.add_argument("--show-callsign", action="store_true", help="Show the standalone CALEB header label.")
+    parser.add_argument("--no-stamp", action="store_true", help="Render without the embossed fleet stamp.")
     args = parser.parse_args()
     output = generate_record(
         destination_name=args.destination_name,
@@ -682,6 +690,7 @@ def main():
         out_path=args.output,
         pdf_path=args.pdf or None,
         show_callsign=args.show_callsign,
+        show_stamp=not args.no_stamp,
     )
     print(output)
 

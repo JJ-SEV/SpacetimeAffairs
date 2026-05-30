@@ -49,6 +49,9 @@ DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 0, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
 DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
 DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 中国北京时间"
 LOCKED_PREVIEW_MAX_DIMENSION = 1400
+LOCKED_PREVIEW_BADGE_VERSION = "v3"
+ANIMATION_PREVIEW_MAX_DIMENSION = 1400
+ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import render_xia_yizhou_pilot_flight_record_v2 as flight_renderer  # noqa: E402
@@ -658,7 +661,7 @@ def regenerate_record_files(row: sqlite3.Row, force: bool = False) -> bool:
 
 def locked_preview_path(original_path: Path) -> Path | None:
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    preview_path = PREVIEW_DIR / f"{original_path.stem}-locked-preview.png"
+    preview_path = PREVIEW_DIR / f"{original_path.stem}-locked-preview-{LOCKED_PREVIEW_BADGE_VERSION}.png"
     if preview_path.exists() and preview_path.stat().st_mtime >= original_path.stat().st_mtime:
         return preview_path
     try:
@@ -694,6 +697,34 @@ def locked_preview_path(original_path: Path) -> Path | None:
         return preview_path
     except Exception as exc:
         print(f"Failed to create locked preview for {original_path}: {exc}", file=sys.stderr)
+        return None
+
+
+def animation_preview_path(row: sqlite3.Row, original_path: Path) -> Path | None:
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    source_path = PREVIEW_DIR / f"{original_path.stem}-animation-source-{ANIMATION_PREVIEW_VERSION}.png"
+    preview_path = PREVIEW_DIR / f"{original_path.stem}-animation-preview-{ANIMATION_PREVIEW_VERSION}.png"
+    if preview_path.exists() and preview_path.stat().st_mtime >= original_path.stat().st_mtime:
+        return preview_path
+    try:
+        flight_renderer.generate_record(
+            destination_name=row["destination_name"],
+            destination_coordinate=row["destination_coordinate"],
+            out_path=source_path,
+            pdf_path=None,
+            show_callsign=True,
+            show_stamp=False,
+        )
+        with Image.open(source_path) as source:
+            preview = source.convert("RGB")
+        preview.thumbnail(
+            (ANIMATION_PREVIEW_MAX_DIMENSION, ANIMATION_PREVIEW_MAX_DIMENSION),
+            Image.Resampling.LANCZOS,
+        )
+        preview.save(preview_path, "PNG", optimize=True)
+        return preview_path
+    except Exception as exc:
+        print(f"Failed to create animation preview for {row['id']}: {exc}", file=sys.stderr)
         return None
 
 
@@ -956,8 +987,29 @@ def address_picker_script() -> str:
 """
 
 
+def archive_access_html(extra_class: str = "") -> str:
+    class_name = f"quick-gallery {extra_class}".strip()
+    return f"""
+  <aside class="{class_name}">
+    <p class="eyebrow">ARCHIVE ACCESS</p>
+    <form class="inline-query" action="/gallery" method="get">
+      <input name="id" maxlength="12" placeholder="输入编号" required>
+      <button type="submit">编号登录</button>
+    </form>
+  </aside>"""
+
+
+def preview_frame_class() -> str:
+    classes = ["record-preview-frame"]
+    if not downloads_unlocked():
+        classes.append("preview-only")
+    return " ".join(classes)
+
+
 def destination_page(message: str = "") -> bytes:
     notice = f'<div class="notice">{esc(message)}</div>' if message else ""
+    desktop_archive = archive_access_html("desktop-archive")
+    mobile_archive = archive_access_html("mobile-archive")
     body = f"""
 {notice}
 <section class="command-deck destination-command">
@@ -968,13 +1020,7 @@ def destination_page(message: str = "") -> bytes:
     <p class="eyebrow">TARGET CLEARANCE</p>
     <h2>规划飞行航道</h2>
   </div>
-  <aside class="quick-gallery">
-    <p class="eyebrow">ARCHIVE ACCESS</p>
-    <form class="inline-query" action="/gallery" method="get">
-      <input name="id" maxlength="12" placeholder="输入编号" required>
-      <button type="submit">编号登录</button>
-    </form>
-  </aside>
+{desktop_archive}
 </section>
 
 <form class="panel wide destination-form" action="/flight/create" method="post">
@@ -997,6 +1043,7 @@ def destination_page(message: str = "") -> bytes:
     <p class="commit-warning"><b>请确认信息</b><span>确认后将自动规划航道，无法撤回。</span></p>
   </div>
 </form>
+{mobile_archive}
 {address_picker_script()}
 """
     return layout("规划飞行航道", body, body_class="home-body")
@@ -1072,7 +1119,7 @@ def flight_loading_page(submission_id: str) -> bytes:
         return flight_loading_fallback_page(submission_id)
     redirect_to = f"/record?id={esc(row['id'])}"
     preview_token = quote(str(row["generated_at"] or row["id"]))
-    record_src = f"/preview?id={esc(row['id'])}&v={preview_token}"
+    record_src = f"/animation-preview?id={esc(row['id'])}&v={preview_token}"
     page = STAMP_ANIMATION_TEMPLATE_PATH.read_text(encoding="utf-8")
     page = page.replace(
         '<title>Flight Record Scanner Seal Preview</title>',
@@ -1095,6 +1142,7 @@ def record_preview_page(submission_id: str) -> bytes:
     if row is None or not row["png_filename"]:
         return destination_page("没找到这个飞行纪录。")
     preview_token = quote(str(row["generated_at"] or row["id"]))
+    frame_class = preview_frame_class()
     body = f"""
 <section class="panel wide success-panel">
   <div class="section-head">
@@ -1106,7 +1154,7 @@ def record_preview_page(submission_id: str) -> bytes:
     <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
     <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
   </dl>
-  <figure class="record-preview-frame" id="record-preview">
+  <figure class="{frame_class}" id="record-preview">
     <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
     <p class="preview-fallback" hidden>预览加载失败，请稍后再试。</p>
     <figcaption>飞行纪录预览</figcaption>
@@ -1156,6 +1204,7 @@ def gallery_page(submission_id: str) -> bytes:
         return status_page(row["id"])
     pdf_name = esc(Path(row["pdf_filename"]).name) if row["pdf_filename"] else ""
     preview_token = quote(str(row["generated_at"] or row["id"]))
+    frame_class = preview_frame_class()
     body = f"""
 <section class="panel wide success-panel">
   <div class="section-head">
@@ -1170,7 +1219,7 @@ def gallery_page(submission_id: str) -> bytes:
   </dl>
   <div class="gallery-grid">
     <article class="gallery-card">
-      <figure class="record-preview-frame">
+      <figure class="{frame_class}">
         <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录图预览" loading="eager">
         <figcaption>飞行纪录图</figcaption>
       </figure>
@@ -1711,6 +1760,7 @@ def status_page(submission_id: str) -> bytes:
     if row["pdf_filename"]:
         pdf_name = esc(Path(row["pdf_filename"]).name)
         preview_token = quote(str(row["generated_at"] or row["id"]))
+        frame_class = preview_frame_class()
         downloads = f"""
 <div class="panel wide success-panel">
   <div class="section-head">
@@ -1719,7 +1769,7 @@ def status_page(submission_id: str) -> bytes:
   </div>
   <p><b>任务目标：</b>{esc(row['destination_name'])}</p>
   <p><b>目的地坐标：</b>{esc(row['destination_coordinate'])}</p>
-  <figure class="record-preview-frame" id="record-preview">
+  <figure class="{frame_class}" id="record-preview">
     <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
     <p class="preview-fallback" hidden>预览加载失败，请直接下载 PDF。</p>
     <figcaption>飞行纪录预览</figcaption>
@@ -1983,6 +2033,22 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             self.serve_path(UPLOAD_DIR / stored)
+        elif parsed.path == "/animation-preview":
+            if not self.require_player_or_admin():
+                return
+            row = db_row("SELECT * FROM submissions WHERE id = ?", (qs.get("id", [""])[0].strip().upper(),))
+            if row is None or not row["png_filename"]:
+                self.send_error(404)
+                return
+            path = GENERATED_DIR / row["png_filename"]
+            if not regenerate_record_files(row, force=True):
+                self.send_error(404)
+                return
+            animation_path = animation_preview_path(row, path)
+            if animation_path is None:
+                self.send_error(404)
+                return
+            self.serve_path(animation_path)
         elif parsed.path == "/preview":
             if not self.require_player_or_admin():
                 return
@@ -2086,7 +2152,23 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
-        if parsed.path == "/preview":
+        if parsed.path == "/animation-preview":
+            if not self.require_player_or_admin():
+                return
+            row = db_row("SELECT * FROM submissions WHERE id = ?", (qs.get("id", [""])[0].strip().upper(),))
+            if row is None or not row["png_filename"]:
+                self.send_error(404)
+                return
+            path = GENERATED_DIR / row["png_filename"]
+            if not path.exists() and not regenerate_record_files(row):
+                self.send_error(404)
+                return
+            animation_path = animation_preview_path(row, path)
+            if animation_path is None:
+                self.send_error(404)
+                return
+            self.serve_path_head(animation_path)
+        elif parsed.path == "/preview":
             if not self.require_player_or_admin():
                 return
             row = db_row("SELECT * FROM submissions WHERE id = ?", (qs.get("id", [""])[0].strip().upper(),))

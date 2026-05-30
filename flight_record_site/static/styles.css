@@ -1351,6 +1351,10 @@ input[type="file"] {
   background: rgba(3, 9, 15, 0.5);
 }
 
+.mobile-archive {
+  display: none;
+}
+
 .quick-gallery .eyebrow {
   margin: 0;
 }
@@ -1446,11 +1450,30 @@ dd {
 }
 
 .record-preview-frame {
+  position: relative;
   margin: 18px 0;
   padding: 12px;
   border: 1px solid rgba(103, 199, 239, 0.28);
   border-radius: 8px;
   background: rgba(4, 10, 16, 0.48);
+}
+
+.record-preview-frame.preview-only::after {
+  content: "PREVIEW ONLY";
+  position: absolute;
+  right: 22px;
+  bottom: 48px;
+  z-index: 2;
+  padding: 7px 10px;
+  border: 1px solid rgba(103, 199, 239, 0.46);
+  border-radius: 5px;
+  background: rgba(2, 8, 14, 0.74);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: 0 0 18px rgba(103, 199, 239, 0.18);
 }
 
 .record-preview-frame figcaption {
@@ -1718,6 +1741,37 @@ dd {
   .status {
     margin-left: 0;
     width: fit-content;
+  }
+
+  .destination-command .desktop-archive {
+    display: none;
+  }
+
+  .mobile-archive {
+    display: grid;
+    margin-top: 12px;
+    padding: 10px;
+    gap: 8px;
+    border-radius: 6px;
+    background: rgba(3, 9, 15, 0.38);
+  }
+
+  .mobile-archive .eyebrow {
+    font-size: 11px;
+  }
+
+  .mobile-archive .inline-query {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mobile-archive .inline-query input,
+  .mobile-archive .inline-query button {
+    min-height: 36px;
+    font-size: 13px;
+  }
+
+  .mobile-archive .inline-query button {
+    padding: 0 12px;
   }
 }
 
