@@ -1890,8 +1890,7 @@
   </style>
 </head>
 <body>
-  <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a" preload="auto"></audio>
-  <audio id="device-ambience" src="assets/device-ambience.m4a" preload="auto" loop></audio>
+  <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a?v=ce6de9d9" preload="auto"></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
   <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
@@ -2004,12 +2003,11 @@
     const gateCopy = document.querySelector("[data-gate-copy]");
     const gateStatus = document.querySelector("[data-gate-status]");
     const signalAudio = document.querySelector("#xia-signal");
-    const deviceAudio = document.querySelector("#device-ambience");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const primeMediaElements = [signalAudio, deviceAudio, alarmAudio, electricGlitchAudio];
-    const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorPromptAudio, electricGlitchAudio];
+    const primeMediaElements = [signalAudio, alarmAudio, electricGlitchAudio];
+    const mediaElements = [signalAudio, alarmAudio, errorPromptAudio, electricGlitchAudio];
     const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
@@ -2018,15 +2016,14 @@
     const errorVoiceDuration = 3300;
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
-    const blackboxAudioDuration = 8640;
+    const blackboxAudioDuration = 8590;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const MIX = Object.freeze({
       alarm: 0.018,
       errorVoice: 0.86,
       electricGlitch: 0.16,
-      blackboxVoice: 0.94,
-      deviceAmbience: 0.016,
+      blackboxVoice: 1,
       scannerNoise: 0.12,
       scannerServo: 0.046,
       stampThump: 0.16,
@@ -2036,8 +2033,7 @@
       crackleNoise: 0.018,
       crackleSpark: 0.014,
       crackleSparkRange: 0.024,
-      stuckVoice: 0.14,
-      signalHighCutDb: -8
+      stuckVoice: 0.14
     });
     let audioCtx = null;
     let soundReady = false;
@@ -2048,7 +2044,6 @@
     let errorStartTime = 0;
     let errorSparks = [];
     let criticalAssetsReady = null;
-    let signalRouteReady = false;
     let errorPromptBuffer = null;
     let errorPromptBufferReady = null;
 
@@ -2589,48 +2584,12 @@
       return alarmOk && errorVoiceOk && glitchOk;
     }
 
-    async function startDeviceAmbience() {
-      if (!soundReady || MIX.deviceAmbience <= 0) return () => {};
-      deviceAudio.pause();
-      deviceAudio.currentTime = 0;
-      deviceAudio.volume = MIX.deviceAmbience;
-      try {
-        await deviceAudio.play();
-      } catch (_) {
-        return () => {};
-      }
-      return () => {
-        deviceAudio.pause();
-        deviceAudio.currentTime = 0;
-      };
-    }
-
-    function routeSignalAudio() {
-      if (!audioCtx || signalRouteReady || !audioCtx.createMediaElementSource) return;
-      try {
-        const source = audioCtx.createMediaElementSource(signalAudio);
-        const shelf = audioCtx.createBiquadFilter();
-        const output = audioCtx.createGain();
-        shelf.type = "highshelf";
-        shelf.frequency.value = 1800;
-        shelf.gain.value = MIX.signalHighCutDb;
-        output.gain.value = 1;
-        source.connect(shelf);
-        shelf.connect(output);
-        output.connect(audioCtx.destination);
-        signalRouteReady = true;
-      } catch (error) {
-        console.warn("Signal route failed", error && (error.name || error.message || error));
-      }
-    }
-
     async function unlockSound() {
       let contextReady = false;
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         await audioCtx.resume();
         contextReady = audioCtx.state === "running";
-        routeSignalAudio();
         loadErrorPromptBuffer();
       } catch (error) {
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
@@ -2646,22 +2605,18 @@
       }
       return new Promise(async (resolve) => {
         let resolved = false;
-        let stopAmbience = () => {};
         const finish = () => {
           if (resolved) return;
           resolved = true;
-          stopAmbience();
           resolve(activeRun === runId);
         };
         try {
           signalAudio.currentTime = 0;
           signalAudio.volume = MIX.blackboxVoice;
           signalAudio.onended = finish;
-          stopAmbience = await startDeviceAmbience();
           await signalAudio.play();
           schedule(finish, blackboxAudioDuration + 500);
         } catch (_) {
-          stopAmbience();
           soundReady = false;
           const ok = await wait(skipBlackboxDuration, runId);
           resolve(ok);
