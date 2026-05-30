@@ -1063,6 +1063,8 @@ def flight_confirm_page(submission_id: str) -> bytes:
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None or not row["png_filename"]:
         return destination_page("没找到这个飞行纪录。")
+    preview_token = quote(str(row["generated_at"] or row["id"]))
+    animation_src = f"/animation-preview?id={esc(row['id'])}&v={preview_token}"
     body = f"""
 <section class="panel wide confirm-panel">
   <div class="section-head">
@@ -1081,6 +1083,7 @@ def flight_confirm_page(submission_id: str) -> bytes:
     <input type="hidden" name="id" value="{esc(row['id'])}">
     <button class="confirm-button" type="submit">确认</button>
   </form>
+  <img src="{animation_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true" class="preload-probe">
 </section>
 """
     return layout("飞行纪录预览", body, body_class="home-body")

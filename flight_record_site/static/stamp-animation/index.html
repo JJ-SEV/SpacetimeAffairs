@@ -888,7 +888,7 @@
     }
 
     body[data-phase="granted"] .access-granted {
-      animation: accessWash 3s cubic-bezier(.18,.72,.22,1) forwards;
+      animation: accessWash 2.2s cubic-bezier(.18,.72,.22,1) forwards;
     }
 
     .access-granted::before {
@@ -899,7 +899,7 @@
     }
 
     body[data-phase="granted"] .access-granted::before {
-      animation: accessRedToGreen 3s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessRedToGreen 2.2s cubic-bezier(.2,.76,.18,1) forwards;
     }
 
     .access-panel {
@@ -915,7 +915,7 @@
     }
 
     body[data-phase="granted"] .access-panel {
-      animation: accessPanelShift 3s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessPanelShift 2.2s cubic-bezier(.2,.76,.18,1) forwards;
     }
 
     .access-panel b {
@@ -937,7 +937,7 @@
     }
 
     body[data-phase="granted"] .access-panel strong {
-      animation: accessTextShift 3s cubic-bezier(.2,.76,.18,1) forwards;
+      animation: accessTextShift 2.2s cubic-bezier(.2,.76,.18,1) forwards;
     }
 
     .access-panel span {
@@ -967,7 +967,7 @@
     }
 
     body[data-phase="granted"] .access-loader::before {
-      animation: accessLoad 2.15s cubic-bezier(.2,.78,.2,1) forwards;
+      animation: accessLoad 1.7s cubic-bezier(.2,.78,.2,1) forwards;
     }
 
     .blackbox-window {
@@ -1699,7 +1699,6 @@
   <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a" preload="auto"></audio>
   <audio id="device-ambience" src="assets/device-ambience.m4a" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
-  <audio id="error-voice" src="assets/error-error-en.m4a" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
     <section class="audio-gate-card">
@@ -1770,6 +1769,14 @@
         </div>
       </div>
     </section>
+    <section class="access-granted">
+      <div class="access-panel">
+        <b>Signature Restored</b>
+        <strong>签发完成</strong>
+        <span>正在同步飞行纪录预览</span>
+        <div class="access-loader" aria-hidden="true"></div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -1792,34 +1799,35 @@
     const signalAudio = document.querySelector("#xia-signal");
     const deviceAudio = document.querySelector("#device-ambience");
     const alarmAudio = document.querySelector("#alarm-sound");
-    const errorVoiceAudio = document.querySelector("#error-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorVoiceAudio, electricGlitchAudio];
-    const criticalImages = Array.from(document.querySelectorAll(".record, .stamp-mark, .scanner-device, .error-plate"));
+    const mediaElements = [signalAudio, deviceAudio, alarmAudio, electricGlitchAudio];
+    const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
     const stampDuration = 6500;
     const alarmDuration = 3000;
-    const errorVoiceDuration = 2250;
-    const warningStaticDelay = 950;
-    const electricGlitchDuration = 1850;
+    const errorVoiceDuration = 2700;
+    const warningStaticDelay = 1180;
+    const electricGlitchDuration = 1450;
     const blackboxAudioDuration = 8640;
     const skipBlackboxDuration = 3200;
+    const grantedDuration = 2200;
     const MIX = Object.freeze({
-      alarm: 0.028,
-      errorVoice: 0.38,
-      electricGlitch: 0.16,
-      blackboxVoice: 0.6,
-      deviceAmbience: 0.07,
-      scannerNoise: 0.055,
-      scannerServo: 0.018,
-      stampThump: 0.034,
-      stampPing: 0.015,
+      alarm: 0.018,
+      errorVoice: 0.42,
+      electricGlitch: 0.2,
+      blackboxVoice: 0.72,
+      deviceAmbience: 0.025,
+      scannerNoise: 0.12,
+      scannerServo: 0.046,
+      stampThump: 0.16,
+      stampPing: 0.062,
       fallbackAlarm: 0.004,
       unlockTone: 0.01,
-      crackleNoise: 0.012,
-      crackleSpark: 0.009,
-      crackleSparkRange: 0.016
+      crackleNoise: 0.018,
+      crackleSpark: 0.014,
+      crackleSparkRange: 0.024,
+      stuckVoice: 0.09
     });
     let audioCtx = null;
     let soundReady = false;
@@ -2169,6 +2177,71 @@
       }
     }
 
+    function playErrorSyllable(at, base = 220) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const formant = audioCtx.createBiquadFilter();
+      const amp = audioCtx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(base, at);
+      osc.frequency.exponentialRampToValueAtTime(base * 0.74, at + .18);
+      formant.type = "bandpass";
+      formant.frequency.setValueAtTime(920, at);
+      formant.frequency.exponentialRampToValueAtTime(520, at + .22);
+      formant.Q.value = 7.2;
+      amp.gain.setValueAtTime(0.0001, at);
+      amp.gain.exponentialRampToValueAtTime(MIX.errorVoice, at + .025);
+      amp.gain.exponentialRampToValueAtTime(MIX.errorVoice * .45, at + .16);
+      amp.gain.exponentialRampToValueAtTime(0.0001, at + .34);
+      osc.connect(formant);
+      formant.connect(amp);
+      amp.connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + .38);
+    }
+
+    function playErrorStuckTone(at, duration = 1.08) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      const amp = audioCtx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(430, at);
+      osc.frequency.exponentialRampToValueAtTime(690, at + .16);
+      lfo.type = "square";
+      lfo.frequency.setValueAtTime(12, at);
+      lfo.frequency.exponentialRampToValueAtTime(34, at + duration * .7);
+      lfoGain.gain.setValueAtTime(34, at);
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(820, at);
+      filter.frequency.exponentialRampToValueAtTime(1220, at + duration * .58);
+      filter.Q.value = 9;
+      amp.gain.setValueAtTime(0.0001, at);
+      amp.gain.exponentialRampToValueAtTime(MIX.stuckVoice, at + .04);
+      amp.gain.setValueAtTime(MIX.stuckVoice, at + duration * .55);
+      amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      osc.connect(filter);
+      filter.connect(amp);
+      amp.connect(audioCtx.destination);
+      lfo.start(at);
+      osc.start(at);
+      lfo.stop(at + duration + .04);
+      osc.stop(at + duration + .04);
+    }
+
+    function playErrorPromptSound() {
+      if (!audioCtx || !soundReady) return;
+      const now = audioCtx.currentTime;
+      playErrorSyllable(now + .08, 230);
+      playErrorSyllable(now + .82, 212);
+      playErrorStuckTone(now + 1.42, 1.18);
+      playElectricCrackle(1.2);
+    }
+
     function playUnlockTone() {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
@@ -2244,6 +2317,13 @@
       });
     }
 
+    function playErrorPrompt(runId) {
+      if (soundReady) {
+        playErrorPromptSound();
+      }
+      return wait(errorVoiceDuration, runId);
+    }
+
     async function playWarningAudioSequence(runId) {
       if (!soundReady) {
         if (!await wait(warningStaticDelay, runId)) return false;
@@ -2253,7 +2333,7 @@
         return true;
       }
       const alarmDone = playMedia(alarmAudio, MIX.alarm, runId, alarmDuration, () => playFallbackAlarm(alarmDuration / 1000));
-      const errorVoiceDone = playMedia(errorVoiceAudio, MIX.errorVoice, runId, errorVoiceDuration);
+      const errorVoiceDone = playErrorPrompt(runId);
       if (!await wait(warningStaticDelay, runId)) return false;
       setStatic(true);
       const glitchDone = playMedia(electricGlitchAudio, MIX.electricGlitch, runId, electricGlitchDuration, () => playElectricCrackle(electricGlitchDuration / 1000));
@@ -2333,6 +2413,9 @@
       if (!await playSignalAudio(runId)) return;
 
       setStatic(false);
+      setPhase("granted");
+      if (!await wait(grantedDuration, runId)) return;
+
       jumpToDownload();
     }
 

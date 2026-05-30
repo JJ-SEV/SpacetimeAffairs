@@ -1386,6 +1386,14 @@ input[type="file"] {
   background: rgba(13, 20, 27, 0.8);
 }
 
+.preload-probe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .status {
   margin-left: auto;
   padding: 7px 10px;
