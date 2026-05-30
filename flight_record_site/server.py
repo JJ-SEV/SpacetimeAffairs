@@ -896,6 +896,7 @@ def address_picker_script() -> str:
 (() => {
   const form = document.querySelector(".destination-form");
   if (!form) return;
+  const targetInput = form.querySelector('[name="destination_name"]');
   const input = form.querySelector(".address-input");
   const lat = form.querySelector(".address-lat");
   const lon = form.querySelector(".address-lon");
@@ -916,6 +917,15 @@ def address_picker_script() -> str:
   function hideSuggest() {
     suggest.hidden = true;
     suggest.innerHTML = "";
+  }
+
+  if (targetInput && input) {
+    targetInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      input.focus();
+      input.scrollIntoView({block: "center", behavior: "smooth"});
+    });
   }
 
   function renderSuggest(items) {
@@ -1029,10 +1039,10 @@ def destination_page(message: str = "") -> bytes:
     <h2>输入目标和目的地</h2>
   </div>
   <label>目标
-    <input name="destination_name" maxlength="24" placeholder="输入目标姓名" required>
+    <input name="destination_name" maxlength="24" placeholder="输入目标姓名" enterkeyhint="next" required>
   </label>
   <label class="address-field">目的地
-    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" autocomplete="off">
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" autocomplete="off" enterkeyhint="go">
     <input type="hidden" name="address_lat" class="address-lat">
     <input type="hidden" name="address_lon" class="address-lon">
     <input type="hidden" name="address_label" class="address-label">
