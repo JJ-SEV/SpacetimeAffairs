@@ -1039,10 +1039,10 @@ def destination_page(message: str = "") -> bytes:
     <h2>输入目标和目的地</h2>
   </div>
   <label>目标
-    <input name="destination_name" maxlength="24" placeholder="输入目标姓名" enterkeyhint="next" required>
+    <input name="destination_name" maxlength="24" placeholder="输入目标姓名" inputmode="text" lang="zh-CN" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
   </label>
   <label class="address-field">目的地
-    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" autocomplete="off" enterkeyhint="go">
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" inputmode="text" lang="zh-CN" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
     <input type="hidden" name="address_lat" class="address-lat">
     <input type="hidden" name="address_lon" class="address-lon">
     <input type="hidden" name="address_label" class="address-label">
@@ -1438,7 +1438,7 @@ def player_gate_page(message: str = "") -> bytes:
       <form class="auth-card" action="/gate" method="post">
         <div class="auth-state">SYNC 0/8</div>
         <label class="pilot-id-label">飞行员 ID
-          <input name="pilot_id" class="auth-input pilot-id-input" autocomplete="username" required>
+          <input name="pilot_id" class="auth-input pilot-id-input" inputmode="email" pattern="[A-Za-z]*" maxlength="16" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" lang="en" required>
           <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
         <label>密码
@@ -1462,8 +1462,14 @@ def player_gate_page(message: str = "") -> bytes:
   const pilotHint = document.querySelector(".pilot-id-hint");
   const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
   let invalidTimer;
+  function cleanPilotId(value) {{
+    return value.normalize("NFKC").replace(/[^A-Za-z]/g, "").toUpperCase();
+  }}
   function syncPilot() {{
-    pilotInput.value = pilotInput.value.replace(/\\s/g, "").toUpperCase();
+    const clean = cleanPilotId(pilotInput.value);
+    if (pilotInput.value !== clean) {{
+      pilotInput.value = clean;
+    }}
     const value = pilotInput.value;
     const invalid = value.length > 0 && !validPilots.has(value);
     pilotInput.classList.toggle("invalid", invalid);
@@ -1516,6 +1522,14 @@ def player_gate_page(message: str = "") -> bytes:
     }}
   }}
   pilotInput.addEventListener("input", syncPilot);
+  pilotInput.addEventListener("paste", (event) => {{
+    event.preventDefault();
+    const pasted = (event.clipboardData || window.clipboardData).getData("text");
+    const start = pilotInput.selectionStart ?? pilotInput.value.length;
+    const end = pilotInput.selectionEnd ?? pilotInput.value.length;
+    pilotInput.value = cleanPilotId(pilotInput.value.slice(0, start) + pasted + pilotInput.value.slice(end));
+    syncPilot();
+  }});
   codeInput.addEventListener("input", syncCode);
   syncPilot();
   syncCode();

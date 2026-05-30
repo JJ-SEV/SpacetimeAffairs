@@ -1802,6 +1802,7 @@
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
+    const primeMediaElements = [signalAudio, deviceAudio, alarmAudio, electricGlitchAudio];
     const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorPromptAudio, electricGlitchAudio];
     const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
@@ -1816,10 +1817,10 @@
     const grantedDuration = 2200;
     const MIX = Object.freeze({
       alarm: 0.018,
-      errorVoice: 0.82,
+      errorVoice: 0.86,
       electricGlitch: 0.16,
-      blackboxVoice: 0.82,
-      deviceAmbience: 0,
+      blackboxVoice: 0.94,
+      deviceAmbience: 0.016,
       scannerNoise: 0.12,
       scannerServo: 0.046,
       stampThump: 0.16,
@@ -1830,7 +1831,7 @@
       crackleSpark: 0.014,
       crackleSparkRange: 0.024,
       stuckVoice: 0.14,
-      signalHighCutDb: -18
+      signalHighCutDb: -8
     });
     let audioCtx = null;
     let soundReady = false;
@@ -1842,6 +1843,8 @@
     let errorSparks = [];
     let criticalAssetsReady = null;
     let signalRouteReady = false;
+    let errorPromptBuffer = null;
+    let errorPromptBufferReady = null;
 
     function setGateContent(title, copy, status, ready) {
       if (gateTitle) gateTitle.textContent = title;
@@ -2259,8 +2262,8 @@
       let played = false;
       try {
         audio.load();
-        audio.muted = false;
-        audio.volume = 0.001;
+        audio.muted = true;
+        audio.volume = 0;
         await audio.play();
         played = true;
         await new Promise((resolve) => setTimeout(resolve, 70));
@@ -2280,6 +2283,39 @@
     function pauseMedia(audio) {
       audio.pause();
       try { audio.currentTime = 0; } catch (_) {}
+    }
+
+    function loadErrorPromptBuffer() {
+      if (!audioCtx || !errorPromptAudio) return Promise.resolve(null);
+      if (!errorPromptBufferReady) {
+        const src = errorPromptAudio.currentSrc || errorPromptAudio.src;
+        errorPromptBufferReady = fetch(src)
+          .then((response) => response.arrayBuffer())
+          .then((buffer) => audioCtx.decodeAudioData(buffer))
+          .then((decoded) => {
+            errorPromptBuffer = decoded;
+            return decoded;
+          })
+          .catch((error) => {
+            console.warn("Error prompt decode failed", error && (error.name || error.message || error));
+            return null;
+          });
+      }
+      return errorPromptBufferReady;
+    }
+
+    function playErrorPromptBuffer() {
+      if (!audioCtx || !soundReady || !errorPromptBuffer) return false;
+      const now = audioCtx.currentTime;
+      const source = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+      source.buffer = errorPromptBuffer;
+      gain.gain.setValueAtTime(safeVolume(MIX.errorVoice), now);
+      gain.gain.linearRampToValueAtTime(0.0001, now + errorVoiceDuration / 1000);
+      source.connect(gain);
+      gain.connect(audioCtx.destination);
+      source.start(now);
+      return true;
     }
 
     function playMedia(audio, volume, runId, fallbackMs, fallback = null) {
@@ -2323,6 +2359,9 @@
 
     function playErrorPrompt(runId) {
       const fallback = () => playErrorPromptSound();
+      if (playErrorPromptBuffer()) {
+        return wait(errorVoiceDuration, runId);
+      }
       return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration, fallback);
     }
 
@@ -2386,11 +2425,11 @@
         await audioCtx.resume();
         contextReady = audioCtx.state === "running";
         routeSignalAudio();
-        playUnlockTone();
+        loadErrorPromptBuffer();
       } catch (error) {
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
       }
-      const mediaReady = (await Promise.all(mediaElements.map(primeMedia))).some(Boolean);
+      const mediaReady = (await Promise.all(primeMediaElements.map(primeMedia))).some(Boolean);
       soundReady = contextReady || mediaReady;
       return soundReady;
     }
