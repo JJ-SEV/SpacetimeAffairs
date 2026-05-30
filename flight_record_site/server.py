@@ -1437,7 +1437,7 @@ def player_gate_page(message: str = "") -> bytes:
       {notice}
       <form class="auth-card" action="/gate" method="post">
         <div class="auth-state">SYNC 0/8</div>
-        <label class="pilot-id-label">飞行员 ID
+        <label class="pilot-id-label">Pilot ID
           <input name="pilot_id" class="auth-input pilot-id-input" inputmode="email" pattern="[A-Za-z]*" maxlength="16" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" lang="en" required>
           <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
