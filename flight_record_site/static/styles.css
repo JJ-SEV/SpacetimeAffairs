@@ -1715,6 +1715,14 @@ dd {
   gap: 12px;
 }
 
+.admin-gallery-access {
+  margin: 0 0 18px;
+}
+
+.admin-gallery-access input {
+  min-width: min(280px, 100%);
+}
+
 .submission p {
   margin: 0;
   color: var(--muted);

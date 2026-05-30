@@ -850,15 +850,15 @@ def query_countdown_script() -> str:
 """
 
 
-def download_countdown_html(row: sqlite3.Row, pdf_name: str) -> str:
-    if not downloads_unlocked():
+def download_countdown_html(row: sqlite3.Row, pdf_name: str, force_unlocked: bool = False, source: str = "player") -> str:
+    if not force_unlocked and not downloads_unlocked():
         return f"""
   <div class="actions locked-actions">
     <button class="button disabled" type="button" disabled>PDF 下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
   </div>
 """
     pdf_link = (
-        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=pdf&source=player" '
+        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=pdf&source={esc(source)}" '
         f'download="{pdf_name}">下载 PDF</a>'
         if pdf_name
         else ""
@@ -1009,9 +1009,9 @@ def archive_access_html(extra_class: str = "") -> str:
   </aside>"""
 
 
-def preview_frame_class() -> str:
+def preview_frame_class(force_unlocked: bool = False) -> str:
     classes = ["record-preview-frame"]
-    if not downloads_unlocked():
+    if not force_unlocked and not downloads_unlocked():
         classes.append("preview-only")
     return " ".join(classes)
 
@@ -1180,8 +1180,8 @@ def record_preview_page(submission_id: str) -> bytes:
     return layout("飞行纪录预览", body, body_class="home-body")
 
 
-def gallery_page(submission_id: str) -> bytes:
-    if not downloads_unlocked():
+def gallery_page(submission_id: str, admin_access: bool = False) -> bytes:
+    if not admin_access and not downloads_unlocked():
         return history_page(f"查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
@@ -1217,7 +1217,13 @@ def gallery_page(submission_id: str) -> bytes:
         return status_page(row["id"])
     pdf_name = esc(Path(row["pdf_filename"]).name) if row["pdf_filename"] else ""
     preview_token = quote(str(row["generated_at"] or row["id"]))
-    frame_class = preview_frame_class()
+    frame_class = preview_frame_class(force_unlocked=admin_access)
+    download_source = "admin" if admin_access else "player"
+    admin_note = (
+        '<p class="muted gallery-note">ADMIN ACCESS：后台预览已绕过倒计时，仅用于提前检查图库布局。</p>'
+        if admin_access
+        else ""
+    )
     body = f"""
 <section class="panel wide success-panel">
   <div class="section-head">
@@ -1236,9 +1242,10 @@ def gallery_page(submission_id: str) -> bytes:
         <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录图预览" loading="eager">
         <figcaption>飞行纪录图</figcaption>
       </figure>
-      {download_countdown_html(row, pdf_name)}
+      {download_countdown_html(row, pdf_name, force_unlocked=admin_access, source=download_source)}
     </article>
   </div>
+  {admin_note}
   <p class="muted gallery-note">追加图片开放后，会显示在同一个图库里。</p>
 </section>
 """
@@ -1938,6 +1945,7 @@ def admin_page() -> bytes:
                 f'<span class="generated-links">文件：'
                 f'<a href="/view?id={esc(row["id"])}&type=pdf" target="_blank" rel="noopener">PDF</a> '
                 f'<a href="/view?id={esc(row["id"])}&type=png" target="_blank" rel="noopener">PNG</a>'
+                f' <a href="/gallery?id={esc(row["id"])}">Gallery</a>'
                 f' <em>后台预览不计入下载纪录</em>'
                 f'</span>'
             )
@@ -1963,6 +1971,10 @@ def admin_page() -> bytes:
     <span>ADMIN</span>
     <h2>审核队列</h2>
   </div>
+  <form class="inline admin-gallery-access" action="/gallery" method="get">
+    <input name="id" maxlength="12" placeholder="输入编号查看 Gallery" required>
+    <button type="submit">进入 Gallery</button>
+  </form>
   <div class="queue">{''.join(cards) or '<p class="muted">还没有提交。</p>'}</div>
 </section>
 """
@@ -2043,9 +2055,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
         return self.client_address[0] if self.client_address else ""
 
     def download_actor_role(self, source: str = "") -> str:
-        if source == "player":
+        if source == "player" and self.is_player():
             return "player"
-        if source == "admin":
+        if source == "admin" and self.is_admin():
             return "admin"
         if self.is_player():
             return "player"
@@ -2101,9 +2113,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 return
             self.send_html(history_page(submission_id=normalize_submission_id(qs.get("id", [""])[0])))
         elif parsed.path == "/gallery":
-            if not self.require_player():
+            if not self.require_player_or_admin():
                 return
-            self.send_html(gallery_page(normalize_submission_id(qs.get("id", [""])[0])))
+            self.send_html(gallery_page(normalize_submission_id(qs.get("id", [""])[0]), admin_access=self.is_admin()))
         elif parsed.path == "/logout":
             self.redirect(
                 "/",
