@@ -1453,6 +1453,18 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       </form>
     </div>
   </section>
+  <div class="password-hint-modal" data-password-hint-modal hidden>
+    <div class="password-hint-scrim" data-password-hint-close></div>
+    <section class="password-hint-dialog" role="dialog" aria-modal="true" aria-labelledby="password-hint-title">
+      <p class="eyebrow">PILOT PASSWORD HINT</p>
+      <h2 id="password-hint-title">是否解锁Pilot ID：XIAYIZHOU/CALEB 密码提示。</h2>
+      <p class="password-hint-answer" data-password-hint-answer hidden>我最重要的人的生日</p>
+      <div class="password-hint-actions">
+        <button class="auth-submit password-hint-confirm" type="button" data-password-hint-confirm>确认</button>
+        <button class="password-hint-cancel" type="button" data-password-hint-close>取消</button>
+      </div>
+    </section>
+  </div>
 </main>
 <script>
     const pilotInput = document.querySelector(".pilot-id-input");
@@ -1465,19 +1477,25 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
     const passwordHintAttempt = {password_hint_attempt_js};
     const passwordFailKey = "flightGatePasswordFailCount";
+    const passwordHintModal = document.querySelector("[data-password-hint-modal]");
+    const passwordHintAnswer = document.querySelector("[data-password-hint-answer]");
+    const passwordHintConfirm = document.querySelector("[data-password-hint-confirm]");
+    const passwordHintCloseControls = Array.from(document.querySelectorAll("[data-password-hint-close]"));
     let invalidTimer;
+    let passwordHintUnlocked = false;
   function cleanPilotId(value) {{
     return value.normalize("NFKC").replace(/[^A-Za-z]/g, "").toUpperCase();
   }}
-  function syncPilot() {{
+  function syncPilot(showError = false) {{
     const clean = cleanPilotId(pilotInput.value);
     if (pilotInput.value !== clean) {{
       pilotInput.value = clean;
     }}
     const value = pilotInput.value;
-    const invalid = value.length > 0 && !validPilots.has(value);
+    const invalid = showError && value.length > 0 && !validPilots.has(value);
     pilotInput.classList.toggle("invalid", invalid);
     pilotHint.textContent = invalid ? "飞行员ID不存在" : "";
+    return value.length === 0 || validPilots.has(value);
   }}
   function flashInvalid() {{
     digitRack.classList.add("invalid");
@@ -1526,10 +1544,20 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       return;
     }}
   }}
+    function closePasswordHint() {{
+      if (!passwordHintModal) return;
+      passwordHintModal.hidden = true;
+      passwordHintUnlocked = false;
+      if (passwordHintAnswer) passwordHintAnswer.hidden = true;
+      if (passwordHintConfirm) passwordHintConfirm.textContent = "确认";
+    }}
     function showPasswordHint() {{
-      if (window.confirm("是否解锁Pilot ID：XIAYIZHOU/CALEB 密码提示。")) {{
-        window.alert("我最重要的人的生日");
-      }}
+      if (!passwordHintModal) return;
+      passwordHintUnlocked = false;
+      if (passwordHintAnswer) passwordHintAnswer.hidden = true;
+      if (passwordHintConfirm) passwordHintConfirm.textContent = "确认";
+      passwordHintModal.hidden = false;
+      requestAnimationFrame(() => passwordHintConfirm && passwordHintConfirm.focus());
     }}
     function recordPasswordFailure(requireValidPilot = true) {{
       if (requireValidPilot && !validPilots.has(cleanPilotId(pilotInput.value))) {{
@@ -1547,22 +1575,51 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
         showPasswordHint();
       }}
     }}
-    pilotInput.addEventListener("input", syncPilot);
+    if (passwordHintConfirm) {{
+      passwordHintConfirm.addEventListener("click", () => {{
+        if (!passwordHintUnlocked) {{
+          passwordHintUnlocked = true;
+          if (passwordHintAnswer) passwordHintAnswer.hidden = false;
+          passwordHintConfirm.textContent = "关闭";
+          return;
+        }}
+        closePasswordHint();
+      }});
+    }}
+    passwordHintCloseControls.forEach((control) => control.addEventListener("click", closePasswordHint));
+    document.addEventListener("keydown", (event) => {{
+      if (event.key === "Escape" && passwordHintModal && !passwordHintModal.hidden) {{
+        closePasswordHint();
+      }}
+    }});
+    pilotInput.addEventListener("input", () => syncPilot(false));
     pilotInput.addEventListener("paste", (event) => {{
       event.preventDefault();
     const pasted = (event.clipboardData || window.clipboardData).getData("text");
     const start = pilotInput.selectionStart ?? pilotInput.value.length;
     const end = pilotInput.selectionEnd ?? pilotInput.value.length;
       pilotInput.value = cleanPilotId(pilotInput.value.slice(0, start) + pasted + pilotInput.value.slice(end));
-      syncPilot();
+      syncPilot(false);
     }});
+    pilotInput.addEventListener("keydown", (event) => {{
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (syncPilot(true)) {{
+        codeInput.focus();
+      }}
+    }});
+    codeInput.addEventListener("focus", () => syncPilot(true));
     codeInput.addEventListener("input", syncCode);
     codeInput.addEventListener("invalid", () => recordPasswordFailure(true));
-    authForm.addEventListener("submit", () => {{
-      syncPilot();
+    authForm.addEventListener("submit", (event) => {{
+      if (!syncPilot(true)) {{
+        event.preventDefault();
+        pilotInput.focus();
+        return;
+      }}
       syncCode(false);
     }});
-    syncPilot();
+    syncPilot(false);
     syncCode();
     if (passwordHintAttempt) {{
       recordPasswordFailure(false);

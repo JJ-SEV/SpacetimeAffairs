@@ -511,6 +511,94 @@ body.home-body::after {
   min-height: 52px;
 }
 
+.password-hint-modal[hidden] {
+  display: none;
+}
+
+.password-hint-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+
+.password-hint-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 4, 8, 0.74);
+  backdrop-filter: blur(12px);
+}
+
+.password-hint-dialog {
+  position: relative;
+  overflow: hidden;
+  width: min(520px, 100%);
+  padding: 26px;
+  border: 1px solid rgba(103, 199, 239, 0.44);
+  border-left: 8px solid var(--danger);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(7, 21, 31, 0.96), rgba(6, 9, 14, 0.94)),
+    rgba(2, 8, 13, 0.96);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.password-hint-dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(103, 199, 239, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(103, 199, 239, 0.08) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: 0.34;
+}
+
+.password-hint-dialog > * {
+  position: relative;
+}
+
+.password-hint-dialog h2 {
+  margin: 8px 0 0;
+  color: #f7fff8;
+  font-size: 22px;
+  line-height: 1.45;
+}
+
+.password-hint-answer {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(128, 227, 188, 0.46);
+  border-radius: 6px;
+  background: rgba(2, 8, 13, 0.72);
+  color: var(--green);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.password-hint-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 22px;
+}
+
+.password-hint-confirm {
+  min-height: 48px;
+}
+
+.password-hint-cancel {
+  min-height: 48px;
+  padding: 0 20px;
+  border-color: rgba(103, 199, 239, 0.36);
+  background: rgba(2, 8, 13, 0.58);
+  color: #c8dfe5;
+}
+
 .loading-shell {
   place-items: center;
 }
@@ -1793,6 +1881,22 @@ dd {
 
   .auth-card {
     padding: 20px;
+  }
+
+  .password-hint-modal {
+    padding: 14px;
+  }
+
+  .password-hint-dialog {
+    padding: 22px 18px;
+  }
+
+  .password-hint-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .password-hint-cancel {
+    width: 100%;
   }
 
   .loading-screen {

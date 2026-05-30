@@ -2025,6 +2025,7 @@
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
+    const failureLoopStopLead = 120;
     const MIX = Object.freeze({
       alarm: 0.018,
       errorVoice: 0.86,
@@ -2612,7 +2613,10 @@
         console.warn("Failure loop play failed", error && (error.name || error.message || error));
         return () => {};
       }
+      let stopped = false;
       return () => {
+        if (stopped) return;
+        stopped = true;
         failureLoopAudio.pause();
         try { failureLoopAudio.currentTime = 0; } catch (_) {}
       };
@@ -2703,12 +2707,18 @@
       }
 
       setStatic(false);
-      stopFailureLoop();
       setPhase("granted");
+      schedule(() => {
+        if (activeRun === runId) stopFailureLoop();
+      }, Math.max(0, accessGrantedVoiceDelay - failureLoopStopLead));
       schedule(() => {
         if (activeRun === runId) playAccessGrantedVoice(runId);
       }, accessGrantedVoiceDelay);
-      if (!await wait(grantedDuration, runId)) return;
+      if (!await wait(grantedDuration, runId)) {
+        stopFailureLoop();
+        return;
+      }
+      stopFailureLoop();
 
       jumpToDownload();
     }
