@@ -898,7 +898,7 @@ def address_picker_script() -> str:
     lon.value = "";
     label.value = "";
     input.classList.remove("has-location");
-    hint.textContent = "输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。";
+    if (hint) hint.textContent = "";
   }
 
   function hideSuggest() {
@@ -911,7 +911,7 @@ def address_picker_script() -> str:
     if (!items.length) {
       const empty = document.createElement("div");
       empty.className = "address-empty";
-      empty.textContent = "没有匹配到候选；可以继续输入、直接使用这段文字，或清空地址随机生成专属坐标。";
+      empty.textContent = "没有匹配到候选；可以继续输入、直接使用这段文字，或清空地址自动搜索目标定位。";
       suggest.append(empty);
       suggest.hidden = false;
       return;
@@ -938,9 +938,11 @@ def address_picker_script() -> str:
         lon.value = button.dataset.lon;
         label.value = button.dataset.label;
         input.classList.toggle("has-location", Boolean(lat.value && lon.value));
-        hint.textContent = lat.value && lon.value
-          ? `已锁定地图候选：${button.dataset.label}`
-          : "已选择文字候选；生成时会继续尝试解析地图坐标。";
+        if (hint) {
+          hint.textContent = lat.value && lon.value
+            ? `已锁定地图候选：${button.dataset.label}`
+            : "已选择文字候选；生成时会继续尝试解析地图坐标。";
+        }
         hideSuggest();
       });
       suggest.append(button);
@@ -1000,19 +1002,18 @@ def destination_page(message: str = "") -> bytes:
     <h2>输入目标和目的地</h2>
   </div>
   <label>目标
-    <input name="destination_name" maxlength="24" placeholder="输入飞行纪录上的目标姓名" required>
+    <input name="destination_name" maxlength="24" placeholder="输入目标姓名" required>
   </label>
   <label class="address-field">目的地
-    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位，生成专属坐标" autocomplete="off">
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" autocomplete="off">
     <input type="hidden" name="address_lat" class="address-lat">
     <input type="hidden" name="address_lon" class="address-lon">
     <input type="hidden" name="address_label" class="address-label">
-    <span class="field-hint address-hint">输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。</span>
     <div class="address-suggest" hidden></div>
   </label>
   <div class="commit-row">
     <button type="submit">确认</button>
-    <p class="commit-warning"><b>请确认信息</b><span>确认后会生成本次飞行纪录预览和查询码。</span></p>
+    <p class="commit-warning"><b>请确认信息</b><span>确认后将自动规划航道，无法撤回。</span></p>
   </div>
 </form>
 {address_picker_script()}
@@ -1569,16 +1570,15 @@ def status_page(submission_id: str) -> bytes:
     <input name="destination_name" maxlength="24" required>
   </label>
   <label class="address-field">地址
-    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位，生成专属坐标" autocomplete="off">
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位" autocomplete="off">
     <input type="hidden" name="address_lat" class="address-lat">
     <input type="hidden" name="address_lon" class="address-lon">
     <input type="hidden" name="address_label" class="address-label">
-    <span class="field-hint address-hint">输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。</span>
     <div class="address-suggest" hidden></div>
   </label>
   <div class="commit-row">
     <button type="submit">确认任务部署</button>
-    <p class="commit-warning"><b>请确认信息</b><span>确认后无法撤回修改。</span></p>
+    <p class="commit-warning"><b>请确认信息</b><span>确认后将自动规划航道，无法撤回。</span></p>
   </div>
 </form>
 <script>
@@ -1599,7 +1599,7 @@ def status_page(submission_id: str) -> bytes:
     lon.value = "";
     label.value = "";
     input.classList.remove("has-location");
-    hint.textContent = "输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。";
+    if (hint) hint.textContent = "";
   }}
 
   function hideSuggest() {{
@@ -1612,7 +1612,7 @@ def status_page(submission_id: str) -> bytes:
     if (!items.length) {{
       const empty = document.createElement("div");
       empty.className = "address-empty";
-      empty.textContent = "没有匹配到候选；可以继续输入、直接使用这段文字，或清空地址随机生成专属坐标。";
+      empty.textContent = "没有匹配到候选；可以继续输入、直接使用这段文字，或清空地址自动搜索目标定位。";
       suggest.append(empty);
       suggest.hidden = false;
       return;
@@ -1639,9 +1639,11 @@ def status_page(submission_id: str) -> bytes:
         lon.value = button.dataset.lon;
         label.value = button.dataset.label;
         input.classList.toggle("has-location", Boolean(lat.value && lon.value));
-        hint.textContent = lat.value && lon.value
-          ? `已锁定地图候选：${{button.dataset.label}}`
-          : "已选择文字候选；生成时会继续尝试解析地图坐标。";
+        if (hint) {{
+          hint.textContent = lat.value && lon.value
+            ? `已锁定地图候选：${{button.dataset.label}}`
+            : "已选择文字候选；生成时会继续尝试解析地图坐标。";
+        }}
         hideSuggest();
       }});
       suggest.append(button);
