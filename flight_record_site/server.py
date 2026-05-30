@@ -1087,14 +1087,6 @@ def flight_loading_page(submission_id: str) -> bytes:
         'window.location.href = "download-placeholder.html";',
         f'window.location.href = "{redirect_to}";',
     )
-    page = page.replace(
-        """    if (params.get("autostart") === "skip") {
-      requestAnimationFrame(() => startStampSequence(false));
-    } else {
-      showAudioChoice();
-    }""",
-        "    requestAnimationFrame(() => startStampSequence(false));",
-    )
     return page.encode("utf-8")
 
 

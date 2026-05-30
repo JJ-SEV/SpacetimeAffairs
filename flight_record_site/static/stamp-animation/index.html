@@ -359,6 +359,7 @@
       transition: opacity .28s ease, visibility .28s ease;
     }
 
+    body[data-phase="preloading"] .audio-gate,
     body[data-phase="audio-choice"] .audio-gate {
       visibility: visible;
       opacity: 1;
@@ -386,10 +387,31 @@
     }
 
     .audio-gate-card p {
-      margin: 0;
+      margin: 16px 0 0;
       color: rgba(236,248,243,.72);
       line-height: 1.6;
       font-size: 15px;
+    }
+
+    .audio-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      color: rgba(130,255,210,.78);
+      font: 800 12px/1 Inter, "Noto Sans SC", sans-serif;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .audio-status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 16px rgba(130,255,210,.7);
+      animation: statusPulse 1s ease-in-out infinite;
     }
 
     .audio-actions {
@@ -415,6 +437,17 @@
 
     .audio-actions button:hover {
       filter: brightness(1.08);
+    }
+
+    .audio-actions button:disabled {
+      cursor: wait;
+      opacity: .48;
+      filter: saturate(.72);
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { transform: scale(.82); opacity: .52; }
+      50% { transform: scale(1.15); opacity: 1; }
     }
 
     body[data-phase="warning"] .failure-overlay::before {
@@ -1669,22 +1702,24 @@
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
     <section class="audio-gate-card">
-      <h2 id="audio-gate-title">是否启用音频</h2>
+      <h2 id="audio-gate-title" data-gate-title>准备签发</h2>
+      <p data-gate-copy>正在载入飞行纪录图与扫描模组</p>
+      <span class="audio-status" data-gate-status>Loading record</span>
       <div class="audio-actions">
-        <button type="button" data-audio-choice="enable">启用音频</button>
-        <button type="button" data-audio-choice="skip">跳过音频（不建议）</button>
+        <button type="button" data-audio-choice="enable" disabled>启动签发</button>
+        <button type="button" data-audio-choice="skip" disabled>静音启动</button>
       </div>
     </section>
   </div>
   <main class="stage">
     <section class="record-bay" aria-label="飞行纪录签发动画预览">
       <div class="record-shell">
-        <img class="record" src="assets/flight-record-default-unstamped.png" alt="飞行纪录">
+        <img class="record" src="assets/flight-record-default-unstamped.png" alt="飞行纪录" loading="eager" decoding="sync" fetchpriority="high">
         <span class="record-glass"></span>
-        <img class="stamp-mark" src="assets/emboss-stamp-mark-web.png" alt="">
+        <img class="stamp-mark" src="assets/emboss-stamp-mark-web.png" alt="" loading="eager" decoding="async">
         <span class="impact-ring"></span>
         <div class="scanner-carriage" aria-hidden="true">
-          <img class="scanner-device" src="assets/ai-scanner-module-v1.png" alt="">
+          <img class="scanner-device" src="assets/ai-scanner-module-v1.png" alt="" loading="eager" decoding="async">
           <span class="scan-light"></span>
           <span class="pressure-pad"></span>
         </div>
@@ -1706,7 +1741,7 @@
 
   <div class="failure-overlay" aria-hidden="true">
     <section class="failure-warning">
-      <img class="error-plate" src="assets/ai-error-chamber-orange-blue-v1.png" alt="">
+      <img class="error-plate" src="assets/ai-error-chamber-orange-blue-v1.png" alt="" loading="eager" decoding="async">
       <canvas class="error-canvas"></canvas>
       <div class="warning-shutters"><span></span><span></span></div>
       <div class="failure-card">
@@ -1750,12 +1785,16 @@
     }
 
     const audioButtons = document.querySelectorAll("[data-audio-choice]");
+    const gateTitle = document.querySelector("[data-gate-title]");
+    const gateCopy = document.querySelector("[data-gate-copy]");
+    const gateStatus = document.querySelector("[data-gate-status]");
     const signalAudio = document.querySelector("#xia-signal");
     const deviceAudio = document.querySelector("#device-ambience");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorVoiceAudio = document.querySelector("#error-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
     const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorVoiceAudio, electricGlitchAudio];
+    const criticalImages = Array.from(document.querySelectorAll(".record, .stamp-mark, .scanner-device, .error-plate"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
     const stampDuration = 6500;
@@ -1789,6 +1828,42 @@
     let errorFrame = 0;
     let errorStartTime = 0;
     let errorSparks = [];
+    let criticalAssetsReady = null;
+
+    function setGateContent(title, copy, status, ready) {
+      if (gateTitle) gateTitle.textContent = title;
+      if (gateCopy) gateCopy.textContent = copy;
+      if (gateStatus) gateStatus.textContent = status;
+      audioButtons.forEach((button) => {
+        button.disabled = !ready;
+      });
+    }
+
+    function waitForImageReady(image) {
+      const decodeImage = () => {
+        if (!image.decode) return Promise.resolve();
+        return image.decode().catch(() => {});
+      };
+      if (image.complete && image.naturalWidth > 0) {
+        return decodeImage();
+      }
+      return new Promise((resolve) => {
+        const done = () => {
+          image.removeEventListener("load", done);
+          image.removeEventListener("error", done);
+          resolve(decodeImage());
+        };
+        image.addEventListener("load", done, { once: true });
+        image.addEventListener("error", done, { once: true });
+      });
+    }
+
+    function waitForCriticalAssets() {
+      if (!criticalAssetsReady) {
+        criticalAssetsReady = Promise.all(criticalImages.map(waitForImageReady));
+      }
+      return criticalAssetsReady;
+    }
 
     function clearSequenceTimers() {
       sequenceTimers.forEach((timer) => clearTimeout(timer));
@@ -2274,6 +2349,20 @@
       setPhase("audio-choice");
     }
 
+    async function prepareStartup() {
+      setStatic(false);
+      setArmed(false);
+      setPhase("preloading");
+      setGateContent("准备签发", "正在载入飞行纪录图与扫描模组", "Loading record", false);
+      await waitForCriticalAssets();
+      if (params.get("autostart") === "skip") {
+        requestAnimationFrame(() => startStampSequence(false));
+        return;
+      }
+      setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
+      showAudioChoice();
+    }
+
     async function startStampSequence(enableAudio) {
       clearSequenceTimers();
       activeRun += 1;
@@ -2285,7 +2374,9 @@
       mediaElements.forEach(pauseMedia);
       soundReady = false;
 
-      if (enableAudio) await unlockSound();
+      const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
+      await waitForCriticalAssets();
+      if (enableAudio) await soundUnlock;
       if (activeRun !== runId) return;
 
       setArmed(true);
@@ -2296,16 +2387,13 @@
 
     audioButtons.forEach((button) => {
       button.addEventListener("click", () => {
+        if (button.disabled) return;
         startStampSequence(button.dataset.audioChoice === "enable");
       });
     });
     window.addEventListener("resize", resizeErrorCanvas);
 
-    if (params.get("autostart") === "skip") {
-      requestAnimationFrame(() => startStampSequence(false));
-    } else {
-      showAudioChoice();
-    }
+    prepareStartup();
   </script>
 </body>
 </html>
