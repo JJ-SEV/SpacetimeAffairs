@@ -486,20 +486,8 @@ def address_suggestions(query: str, limit: int = 6) -> list[dict[str, object]]:
     if cache_key in _ADDRESS_SUGGEST_CACHE:
         return _ADDRESS_SUGGEST_CACHE[cache_key]
     results: list[dict[str, object]] = []
-    seen: set[str] = set()
-    for item in [*amap_inputtips(query, limit=limit), *local_address_matches(query, limit=limit)]:
-        key = normalize_place_query(f"{item.get('name', '')}|{item.get('address', '')}")
-        if key in seen:
-            continue
-        seen.add(key)
-        results.append(item)
-        if len(results) >= limit:
-            break
-    if len(results) < limit and len(normalize_place_query(query)) >= 2:
-        custom = custom_address_result(query)
-        key = normalize_place_query(f"{custom['name']}|{custom['address']}")
-        if key not in seen:
-            results.append(custom)
+    if normalize_place_query(query):
+        results.append(custom_address_result(query))
     _ADDRESS_SUGGEST_CACHE[cache_key] = results
     return results
 
@@ -513,8 +501,7 @@ def resolve_address_location(address: str, lat_text: str = "", lon_text: str = "
     remote = amap_geocode(address)
     if remote:
         return remote
-    local = local_address_matches(address, limit=1)
-    return local[0] if local else None
+    return None
 
 
 def coordinate_from_location(lat: float, lon: float, label: str) -> str:
@@ -954,7 +941,7 @@ def address_picker_script() -> str:
     clearSelection();
     const query = input.value.trim();
     clearTimeout(timer);
-    if (query.length < 2) {
+    if (!query) {
       hideSuggest();
       return;
     }
@@ -1655,7 +1642,7 @@ def status_page(submission_id: str) -> bytes:
     clearSelection();
     const query = input.value.trim();
     clearTimeout(timer);
-    if (query.length < 2) {{
+    if (!query) {{
       hideSuggest();
       return;
     }}
@@ -2030,7 +2017,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not self.require_player():
                 return
             query = qs.get("q", [""])[0].strip()
-            if len(query) < 2:
+            if not query:
                 self.send_json({"items": []})
                 return
             self.send_json({"items": address_suggestions(query[:80])})
