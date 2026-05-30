@@ -1225,25 +1225,33 @@ def gallery_page(submission_id: str, admin_access: bool = False) -> bytes:
         else ""
     )
     body = f"""
-<section class="panel wide success-panel">
-  <div class="section-head">
+<section class="panel wide success-panel gallery-library">
+  <div class="section-head gallery-head">
     <span>LIB</span>
-    <h2>飞行纪录图库</h2>
+    <h2>{esc(row['id'])}</h2>
     {status_badge(row['status'])}
   </div>
-  <dl class="meta">
-    <div><dt>编号</dt><dd>{esc(row['id'])}</dd></div>
-    <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
-    <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
-  </dl>
-  <div class="gallery-grid">
-    <article class="gallery-card">
-      <figure class="{frame_class}">
-        <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录图预览" loading="eager">
-        <figcaption>飞行纪录图</figcaption>
-      </figure>
-      {download_countdown_html(row, pdf_name, force_unlocked=admin_access, source=download_source)}
-    </article>
+  <div class="gallery-directory" aria-label="图库目录">
+    <p class="gallery-directory-label">目录</p>
+    <details class="gallery-entry">
+      <summary class="gallery-summary">
+        <span class="gallery-thumb">
+          <img src="/preview?id={esc(row['id'])}&v={preview_token}" alt="" loading="eager">
+        </span>
+        <span class="gallery-entry-copy">
+          <b>返航飞行纪录图</b>
+          <em>{esc(row['destination_name'])} · {esc(row['destination_coordinate'])}</em>
+        </span>
+        <span class="gallery-toggle" aria-hidden="true"></span>
+      </summary>
+      <div class="gallery-entry-panel">
+        <figure class="{frame_class}">
+          <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="返航飞行纪录图" loading="lazy">
+          <figcaption>返航飞行纪录图</figcaption>
+        </figure>
+        {download_countdown_html(row, pdf_name, force_unlocked=admin_access, source=download_source)}
+      </div>
+    </details>
   </div>
   {admin_note}
   <p class="muted gallery-note">追加图片开放后，会显示在同一个图库里。</p>
