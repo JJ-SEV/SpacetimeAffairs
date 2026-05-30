@@ -1421,8 +1421,9 @@ def help_page() -> bytes:
     return layout("帮助", body, body_class="help-body")
 
 
-def player_gate_page(message: str = "") -> bytes:
+def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> bytes:
     notice = f'<div class="auth-alert">{esc(message)}</div>' if message else ""
+    password_hint_attempt_js = "true" if password_hint_attempt else "false"
     body = f"""
 <main class="auth-shell">
   <a class="auth-help" href="/help">帮助</a>
@@ -1454,14 +1455,17 @@ def player_gate_page(message: str = "") -> bytes:
   </section>
 </main>
 <script>
-  const pilotInput = document.querySelector(".pilot-id-input");
-  const codeInput = document.querySelector(".code-input");
-  const digitRack = document.querySelector(".digit-rack");
-  const cells = Array.from(document.querySelectorAll(".digit-rack span"));
-  const state = document.querySelector(".auth-state");
-  const pilotHint = document.querySelector(".pilot-id-hint");
-  const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
-  let invalidTimer;
+    const pilotInput = document.querySelector(".pilot-id-input");
+    const codeInput = document.querySelector(".code-input");
+    const authForm = document.querySelector(".auth-card");
+    const digitRack = document.querySelector(".digit-rack");
+    const cells = Array.from(document.querySelectorAll(".digit-rack span"));
+    const state = document.querySelector(".auth-state");
+    const pilotHint = document.querySelector(".pilot-id-hint");
+    const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
+    const passwordHintAttempt = {password_hint_attempt_js};
+    const passwordFailKey = "flightGatePasswordFailCount";
+    let invalidTimer;
   function cleanPilotId(value) {{
     return value.normalize("NFKC").replace(/[^A-Za-z]/g, "").toUpperCase();
   }}
@@ -1506,9 +1510,9 @@ def player_gate_page(message: str = "") -> bytes:
     }}
     return {{ clean, rejected }};
   }}
-  function syncCode(showError = true) {{
-    const result = birthdayDigits(codeInput.value);
-    const clean = result.clean;
+    function syncCode(showError = true) {{
+      const result = birthdayDigits(codeInput.value);
+      const clean = result.clean;
     if (clean !== codeInput.value) {{
       codeInput.value = clean;
     }}
@@ -1518,23 +1522,52 @@ def player_gate_page(message: str = "") -> bytes:
     state.textContent = clean.length === 8 ? "CLEARANCE READY" : `SYNC ${{clean.length}}/8`;
     if (result.rejected && showError) {{
       flashInvalid();
-      return;
+        return;
+      }}
     }}
-  }}
-  pilotInput.addEventListener("input", syncPilot);
-  pilotInput.addEventListener("paste", (event) => {{
-    event.preventDefault();
+    function showPasswordHint() {{
+      if (window.confirm("是否解锁Pilot ID：XIAYIZHOU/CALEB 密码提示。")) {{
+        window.alert("我最重要的人的生日");
+      }}
+    }}
+    function recordPasswordFailure(requireValidPilot = true) {{
+      if (requireValidPilot && !validPilots.has(cleanPilotId(pilotInput.value))) {{
+        return;
+      }}
+      try {{
+        const failCount = Number(localStorage.getItem(passwordFailKey) || "0") + 1;
+        if (failCount >= 3) {{
+          localStorage.setItem(passwordFailKey, "0");
+          showPasswordHint();
+        }} else {{
+          localStorage.setItem(passwordFailKey, String(failCount));
+        }}
+      }} catch (error) {{
+        showPasswordHint();
+      }}
+    }}
+    pilotInput.addEventListener("input", syncPilot);
+    pilotInput.addEventListener("paste", (event) => {{
+      event.preventDefault();
     const pasted = (event.clipboardData || window.clipboardData).getData("text");
     const start = pilotInput.selectionStart ?? pilotInput.value.length;
     const end = pilotInput.selectionEnd ?? pilotInput.value.length;
-    pilotInput.value = cleanPilotId(pilotInput.value.slice(0, start) + pasted + pilotInput.value.slice(end));
+      pilotInput.value = cleanPilotId(pilotInput.value.slice(0, start) + pasted + pilotInput.value.slice(end));
+      syncPilot();
+    }});
+    codeInput.addEventListener("input", syncCode);
+    codeInput.addEventListener("invalid", () => recordPasswordFailure(true));
+    authForm.addEventListener("submit", () => {{
+      syncPilot();
+      syncCode(false);
+    }});
     syncPilot();
-  }});
-  codeInput.addEventListener("input", syncCode);
-  syncPilot();
-  syncCode();
-</script>
-"""
+    syncCode();
+    if (passwordHintAttempt) {{
+      recordPasswordFailure(false);
+    }}
+  </script>
+  """
     return auth_layout("Flight Gate", body)
 
 
@@ -2283,8 +2316,11 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             form = self.parse_urlencoded()
             pilot_id = form.get("pilot_id", "").strip().upper()
             password = form.get("password", form.get("birthday", "")).strip()
-            if pilot_id not in VALID_PILOT_IDS or len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
-                self.send_html(player_gate_page("飞行员ID或密码不正确，密码为8位数字。"), 403)
+            if pilot_id not in VALID_PILOT_IDS:
+                self.send_html(player_gate_page("Pilot ID不存在。"), 403)
+                return
+            if len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
+                self.send_html(player_gate_page("密码不正确，密码为8位数字。", password_hint_attempt=True), 403)
                 return
             self.redirect(
                 "/",
