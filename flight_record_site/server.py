@@ -38,6 +38,7 @@ ADMIN_SECRET_PATH = DATA_DIR / "admin_secret.txt"
 ADMIN_PASSWORD_PATH = DATA_DIR / "admin_password.txt"
 AMAP_KEY_PATH = DATA_DIR / "amap_key.txt"
 STAMP_ANIMATION_TEMPLATE_PATH = APP_ROOT / "static" / "stamp-animation" / "index.html"
+GALLERY_STATIC_DIR = APP_ROOT / "gallery_assets"
 ADMIN_COOKIE = "flight_record_admin"
 PLAYER_COOKIE = "flight_record_player"
 _ADMIN_SECRET_CACHE: str | None = None
@@ -52,6 +53,16 @@ LOCKED_PREVIEW_MAX_DIMENSION = 1400
 LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
+RECORD_JPG_VERSION = "jpg-v1"
+STATIC_GALLERY_ITEMS = (
+    {"slug": "bantouming-qinzhan", "title": "半透明侵占", "file": "bantouming-qinzhan.jpg"},
+    {"slug": "shuangying-jiaodieshi", "title": "双影交叠时", "file": "shuangying-jiaodieshi.jpg"},
+    {"slug": "benyong-02", "title": "奔涌02", "file": "benyong-02.jpg"},
+    {"slug": "benyong-01", "title": "奔涌01", "file": "benyong-01.jpg"},
+    {"slug": "zunming-siyangguan-02", "title": "遵命饲养官02", "file": "zunming-siyangguan-02.jpg"},
+    {"slug": "zunming-siyangguan-01", "title": "遵命饲养官01", "file": "zunming-siyangguan-01.jpg"},
+)
+STATIC_GALLERY_BY_SLUG = {item["slug"]: item for item in STATIC_GALLERY_ITEMS}
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import render_xia_yizhou_pilot_flight_record_v2 as flight_renderer  # noqa: E402
@@ -728,8 +739,27 @@ def animation_preview_path(row: sqlite3.Row, original_path: Path) -> Path | None
         return None
 
 
+def record_jpg_path(row: sqlite3.Row, force: bool = False) -> Path | None:
+    if not row["png_filename"]:
+        return None
+    if not regenerate_record_files(row, force=force):
+        return None
+    source_path = GENERATED_DIR / row["png_filename"]
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    jpg_path = PREVIEW_DIR / f"{source_path.stem}-{RECORD_JPG_VERSION}.jpg"
+    if jpg_path.exists() and jpg_path.stat().st_mtime >= source_path.stat().st_mtime:
+        return jpg_path
+    try:
+        with Image.open(source_path) as source:
+            source.convert("RGB").save(jpg_path, "JPEG", quality=92, optimize=True, progressive=True)
+        return jpg_path
+    except Exception as exc:
+        print(f"Failed to create JPG record for {row['id']}: {exc}", file=sys.stderr)
+        return None
+
+
 def record_download(row: sqlite3.Row, file_type: str, actor_role: str, client_ip: str, user_agent: str) -> None:
-    if file_type not in {"pdf", "png"}:
+    if file_type not in {"jpg", "pdf", "png"}:
         return
     db_execute(
         """
@@ -753,6 +783,7 @@ def download_record_html(submission_id: str) -> str:
         """
         SELECT
             COUNT(*) AS total,
+            SUM(CASE WHEN file_type = 'jpg' THEN 1 ELSE 0 END) AS jpg_count,
             SUM(CASE WHEN file_type = 'pdf' THEN 1 ELSE 0 END) AS pdf_count,
             SUM(CASE WHEN file_type = 'png' THEN 1 ELSE 0 END) AS png_count,
             MAX(downloaded_at) AS last_downloaded_at
@@ -781,7 +812,7 @@ def download_record_html(submission_id: str) -> str:
     detail = f'<span>{recent_text}</span>' if recent_text else ""
     return (
         f'<p class="download-record"><b>下载纪录：</b>共 {total} 次 · '
-        f'PDF {int(summary["pdf_count"] or 0)} · PNG {int(summary["png_count"] or 0)} · '
+        f'JPG {int(summary["jpg_count"] or 0)} · PDF {int(summary["pdf_count"] or 0)} · PNG {int(summary["png_count"] or 0)} · '
         f'最近 {esc(summary["last_downloaded_at"])}</p>'
         f'<p class="download-record compact">{detail}</p>'
     )
@@ -850,27 +881,89 @@ def query_countdown_script() -> str:
 """
 
 
-def download_countdown_html(row: sqlite3.Row, pdf_name: str, force_unlocked: bool = False, source: str = "player") -> str:
+def gallery_download_html(href: str, download_name: str, force_unlocked: bool = False) -> str:
     if not force_unlocked and not downloads_unlocked():
         return f"""
   <div class="actions locked-actions">
-    <button class="button disabled" type="button" disabled>PDF 下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
+    <button class="button disabled" type="button" disabled>JPG 下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
   </div>
 """
-    pdf_link = (
-        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=pdf&source={esc(source)}" '
-        f'download="{pdf_name}">下载 PDF</a>'
-        if pdf_name
-        else ""
-    )
+    download_link = f'<a class="button download-button" href="{esc(href)}" download="{esc(download_name)}">下载 JPG</a>'
     return f"""
   <div class="download-ready">
-    <p class="muted">下载窗口已开放，可以保存 PDF。</p>
+    <p class="muted">下载窗口已开放，可以保存 JPG。</p>
   </div>
   <div class="actions download-actions">
-    {pdf_link}
+    {download_link}
   </div>
 """
+
+
+def record_jpg_download_html(row: sqlite3.Row, force_unlocked: bool = False, source: str = "player") -> str:
+    if not row["png_filename"]:
+        return ""
+    jpg_name = Path(row["png_filename"]).with_suffix(".jpg").name
+    href = f'/download?id={esc(row["id"])}&type=jpg&source={esc(source)}'
+    return gallery_download_html(href, jpg_name, force_unlocked=force_unlocked)
+
+
+def gallery_record_entry_html(row: sqlite3.Row, preview_token: str, frame_class: str, force_unlocked: bool, source: str) -> str:
+    return f"""
+    <details class="gallery-entry">
+      <summary class="gallery-summary">
+        <span class="gallery-thumb">
+          <img src="/preview?id={esc(row['id'])}&v={preview_token}" alt="" loading="eager">
+        </span>
+        <span class="gallery-entry-copy">
+          <b>返航飞行纪录图</b>
+          <em>{esc(row['destination_name'])} · {esc(row['destination_coordinate'])}</em>
+        </span>
+        <span class="gallery-toggle" aria-hidden="true"></span>
+      </summary>
+      <div class="gallery-entry-panel">
+        <figure class="{frame_class}">
+          <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="返航飞行纪录图" loading="lazy">
+          <figcaption>返航飞行纪录图</figcaption>
+        </figure>
+        {record_jpg_download_html(row, force_unlocked=force_unlocked, source=source)}
+      </div>
+    </details>
+"""
+
+
+def gallery_static_entry_html(row: sqlite3.Row, item: dict[str, str], force_unlocked: bool, source: str) -> str:
+    slug = item["slug"]
+    title = item["title"]
+    download_name = f"{title}.jpg"
+    thumb_src = f"/gallery-image?id={esc(row['id'])}&asset={esc(slug)}&variant=thumb"
+    full_src = f"/gallery-image?id={esc(row['id'])}&asset={esc(slug)}"
+    download_href = f"/download?id={esc(row['id'])}&type=gallery-jpg&asset={esc(slug)}&source={esc(source)}"
+    return f"""
+    <details class="gallery-entry">
+      <summary class="gallery-summary">
+        <span class="gallery-thumb">
+          <img src="{thumb_src}" alt="" loading="lazy">
+        </span>
+        <span class="gallery-entry-copy">
+          <b>{esc(title)}</b>
+          <em>JPG</em>
+        </span>
+        <span class="gallery-toggle" aria-hidden="true"></span>
+      </summary>
+      <div class="gallery-entry-panel">
+        <figure class="record-preview-frame">
+          <img class="record-preview" src="{full_src}" alt="{esc(title)}" loading="lazy">
+          <figcaption>{esc(title)}</figcaption>
+        </figure>
+        {gallery_download_html(download_href, download_name, force_unlocked=force_unlocked)}
+      </div>
+    </details>
+"""
+
+
+def gallery_static_path(item: dict[str, str], variant: str = "full") -> Path:
+    folder = "thumbs" if variant == "thumb" else "full"
+    return GALLERY_STATIC_DIR / folder / item["file"]
 
 
 def download_locked_page(submission_id: str) -> bytes:
@@ -881,7 +974,7 @@ def download_locked_page(submission_id: str) -> bytes:
     <span>LOCK</span>
     <h2>下载尚未开放</h2>
   </div>
-  <p class="muted">查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回查询页查看倒计时。</p>
+  <p class="muted">查看状态和 JPG 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回查询页查看倒计时。</p>
   <div class="actions status-actions">
     <a class="button ghost" href="{back_href}">返回查询页</a>
   </div>
@@ -1182,7 +1275,7 @@ def record_preview_page(submission_id: str) -> bytes:
 
 def gallery_page(submission_id: str, admin_access: bool = False) -> bytes:
     if not admin_access and not downloads_unlocked():
-        return history_page(f"查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
+        return history_page(f"查看状态和 JPG 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
         return history_page("没找到这个编号。")
@@ -1215,10 +1308,14 @@ def gallery_page(submission_id: str, admin_access: bool = False) -> bytes:
         return layout("图库状态", body, body_class="home-body")
     if not row["png_filename"]:
         return status_page(row["id"])
-    pdf_name = esc(Path(row["pdf_filename"]).name) if row["pdf_filename"] else ""
     preview_token = quote(str(row["generated_at"] or row["id"]))
     frame_class = preview_frame_class(force_unlocked=admin_access)
     download_source = "admin" if admin_access else "player"
+    gallery_entries = [gallery_record_entry_html(row, preview_token, frame_class, admin_access, download_source)]
+    gallery_entries.extend(
+        gallery_static_entry_html(row, item, admin_access, download_source)
+        for item in STATIC_GALLERY_ITEMS
+    )
     admin_note = (
         '<p class="muted gallery-note">ADMIN ACCESS：后台预览已绕过倒计时，仅用于提前检查图库布局。</p>'
         if admin_access
@@ -1233,28 +1330,9 @@ def gallery_page(submission_id: str, admin_access: bool = False) -> bytes:
   </div>
   <div class="gallery-directory" aria-label="图库目录">
     <p class="gallery-directory-label">目录</p>
-    <details class="gallery-entry">
-      <summary class="gallery-summary">
-        <span class="gallery-thumb">
-          <img src="/preview?id={esc(row['id'])}&v={preview_token}" alt="" loading="eager">
-        </span>
-        <span class="gallery-entry-copy">
-          <b>返航飞行纪录图</b>
-          <em>{esc(row['destination_name'])} · {esc(row['destination_coordinate'])}</em>
-        </span>
-        <span class="gallery-toggle" aria-hidden="true"></span>
-      </summary>
-      <div class="gallery-entry-panel">
-        <figure class="{frame_class}">
-          <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="返航飞行纪录图" loading="lazy">
-          <figcaption>返航飞行纪录图</figcaption>
-        </figure>
-        {download_countdown_html(row, pdf_name, force_unlocked=admin_access, source=download_source)}
-      </div>
-    </details>
+    {''.join(gallery_entries)}
   </div>
   {admin_note}
-  <p class="muted gallery-note">追加图片开放后，会显示在同一个图库里。</p>
 </section>
 """
     return layout("飞行纪录图库", body, body_class="home-body")
@@ -1321,9 +1399,9 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
     query_button_disabled = "" if query_unlocked else " disabled"
     query_button_text = "查看状态" if query_unlocked else "等待开放"
     query_copy = (
-        "查询已开放，可以查看审核状态并进入 PDF 下载。"
+        "查询已开放，可以查看审核状态并进入 JPG 下载。"
         if query_unlocked
-        else "6月13日 00:00 中国北京时间后开放查询，届时可查看审核状态并进入 PDF 下载。"
+        else "6月13日 00:00 中国北京时间后开放查询，届时可查看审核状态并进入 JPG 下载。"
     )
     countdown_hidden = " hidden" if query_unlocked else ""
     current_code = f"""
@@ -1345,7 +1423,7 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
   <div class="signal-grid">
     <div><b>VERIFY</b><span>MANUAL</span></div>
     <div><b>QUERY</b><span>CODE</span></div>
-    <div><b>GALLERY</b><span>PDF</span></div>
+    <div><b>GALLERY</b><span>JPG</span></div>
   </div>
 </section>
 <section class="workspace two">
@@ -1766,7 +1844,7 @@ def status_badge(status: str) -> str:
 
 def status_page(submission_id: str) -> bytes:
     if not downloads_unlocked():
-        return history_page(f"查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
+        return history_page(f"查看状态和 JPG 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
         return public_page("没找到这个编号。")
@@ -1891,7 +1969,6 @@ def status_page(submission_id: str) -> bytes:
 </script>
 """
     if row["pdf_filename"]:
-        pdf_name = esc(Path(row["pdf_filename"]).name)
         preview_token = quote(str(row["generated_at"] or row["id"]))
         frame_class = preview_frame_class()
         downloads = f"""
@@ -1904,10 +1981,10 @@ def status_page(submission_id: str) -> bytes:
   <p><b>目的地坐标：</b>{esc(row['destination_coordinate'])}</p>
   <figure class="{frame_class}" id="record-preview">
     <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
-    <p class="preview-fallback" hidden>预览加载失败，请直接下载 PDF。</p>
+    <p class="preview-fallback" hidden>预览加载失败，请直接下载 JPG。</p>
     <figcaption>飞行纪录预览</figcaption>
   </figure>
-  {download_countdown_html(row, pdf_name)}
+  {record_jpg_download_html(row)}
 </div>
 """
 
@@ -2023,7 +2100,15 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(path.stat().st_size))
         self.send_header("Cache-Control", "no-store")
         if download_name:
-            self.send_header("Content-Disposition", f'attachment; filename="{download_name}"')
+            fallback_name = "".join(
+                ch if 32 <= ord(ch) < 127 and ch not in {'"', "\\", ";"} else "_"
+                for ch in download_name
+            ).strip() or "download"
+            encoded_name = urllib.parse.quote(download_name, safe="")
+            self.send_header(
+                "Content-Disposition",
+                f"attachment; filename=\"{fallback_name}\"; filename*=UTF-8''{encoded_name}",
+            )
         else:
             self.send_header("Content-Disposition", "inline")
         self.end_headers()
@@ -2205,6 +2290,22 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                     return
                 path = locked_path
             self.serve_path(path)
+        elif parsed.path == "/gallery-image":
+            if not self.require_player_or_admin():
+                return
+            row = db_row("SELECT * FROM submissions WHERE id = ?", (qs.get("id", [""])[0].strip().upper(),))
+            item = STATIC_GALLERY_BY_SLUG.get(qs.get("asset", [""])[0])
+            if row is None or item is None:
+                self.send_error(404)
+                return
+            if row["status"] != "approved":
+                self.send_error(403)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_error(403)
+                return
+            variant = "thumb" if qs.get("variant", ["full"])[0] == "thumb" else "full"
+            self.serve_path(gallery_static_path(item, variant))
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
                 return
@@ -2223,7 +2324,13 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 if not downloads_unlocked():
                     self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
                     return
-            if kind == "png" and row["png_filename"]:
+            if kind == "jpg" and row["png_filename"]:
+                path = record_jpg_path(row, force=True)
+                if path is None:
+                    self.send_error(404)
+                    return
+                self.serve_path(path)
+            elif kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not regenerate_record_files(row, force=True):
                     self.send_error(404)
@@ -2246,7 +2353,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
-                if kind == "png":
+                if kind in {"pdf", "png"}:
                     self.send_error(404)
                     return
                 if row["status"] != "approved":
@@ -2255,7 +2362,24 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 if not downloads_unlocked():
                     self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
                     return
-            if kind == "png" and row["png_filename"]:
+            if kind == "jpg" and row["png_filename"]:
+                path = record_jpg_path(row, force=True)
+                if path is None:
+                    self.send_error(404)
+                    return
+                role = self.download_actor_role(qs.get("source", [""])[0])
+                record_download(row, "jpg", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                self.serve_path(path, Path(row["png_filename"]).with_suffix(".jpg").name)
+            elif kind == "gallery-jpg":
+                item = STATIC_GALLERY_BY_SLUG.get(qs.get("asset", [""])[0])
+                if item is None:
+                    self.send_error(404)
+                    return
+                path = gallery_static_path(item, "full")
+                role = self.download_actor_role(qs.get("source", [""])[0])
+                record_download(row, "jpg", role, self.client_ip(), self.headers.get("User-Agent", ""))
+                self.serve_path(path, f"{item['title']}.jpg")
+            elif kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not regenerate_record_files(row, force=True):
                     self.send_error(404)
@@ -2324,6 +2448,22 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                     return
                 path = locked_path
             self.serve_path_head(path)
+        elif parsed.path == "/gallery-image":
+            if not self.require_player_or_admin():
+                return
+            row = db_row("SELECT * FROM submissions WHERE id = ?", (qs.get("id", [""])[0].strip().upper(),))
+            item = STATIC_GALLERY_BY_SLUG.get(qs.get("asset", [""])[0])
+            if row is None or item is None:
+                self.send_error(404)
+                return
+            if row["status"] != "approved":
+                self.send_error(403)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_error(403)
+                return
+            variant = "thumb" if qs.get("variant", ["full"])[0] == "thumb" else "full"
+            self.serve_path_head(gallery_static_path(item, variant))
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
                 return
@@ -2339,7 +2479,13 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 if row["status"] != "approved" or not downloads_unlocked():
                     self.send_error(403)
                     return
-            if kind == "png" and row["png_filename"]:
+            if kind == "jpg" and row["png_filename"]:
+                path = record_jpg_path(row)
+                if path is None:
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path)
+            elif kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not path.exists() and not regenerate_record_files(row):
                     self.send_error(404)
@@ -2362,13 +2508,25 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
-                if kind == "png":
+                if kind in {"pdf", "png"}:
                     self.send_error(404)
                     return
                 if row["status"] != "approved" or not downloads_unlocked():
                     self.send_error(403)
                     return
-            if kind == "png" and row["png_filename"]:
+            if kind == "jpg" and row["png_filename"]:
+                path = record_jpg_path(row)
+                if path is None:
+                    self.send_error(404)
+                    return
+                self.serve_path_head(path, Path(row["png_filename"]).with_suffix(".jpg").name)
+            elif kind == "gallery-jpg":
+                item = STATIC_GALLERY_BY_SLUG.get(qs.get("asset", [""])[0])
+                if item is None:
+                    self.send_error(404)
+                    return
+                self.serve_path_head(gallery_static_path(item, "full"), f"{item['title']}.jpg")
+            elif kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not path.exists() and not regenerate_record_files(row):
                     self.send_error(404)
