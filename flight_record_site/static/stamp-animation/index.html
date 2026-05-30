@@ -1891,8 +1891,10 @@
 </head>
 <body>
   <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a?v=ce6de9d9" preload="auto"></audio>
+  <audio id="failure-loop" src="assets/error-background-loop-ce6de9d9.m4a?v=ce6de9d9" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
   <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
+  <audio id="access-granted-voice" src="assets/access-granted-system.m4a?v=zarvox1" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
     <section class="audio-gate-card">
@@ -1978,7 +1980,7 @@
         </strong>
         <span class="access-note">
           <span class="access-denied-note">正在重新校验飞行签发权限</span>
-          <span class="access-granted-note">正在同步飞行纪录预览</span>
+          <span class="access-granted-note">正在同步飞行航道</span>
         </span>
         <div class="access-loader" aria-hidden="true"></div>
       </div>
@@ -2003,11 +2005,13 @@
     const gateCopy = document.querySelector("[data-gate-copy]");
     const gateStatus = document.querySelector("[data-gate-status]");
     const signalAudio = document.querySelector("#xia-signal");
+    const failureLoopAudio = document.querySelector("#failure-loop");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
+    const accessGrantedAudio = document.querySelector("#access-granted-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const primeMediaElements = [signalAudio, alarmAudio, electricGlitchAudio];
-    const mediaElements = [signalAudio, alarmAudio, errorPromptAudio, electricGlitchAudio];
+    const primeMediaElements = [signalAudio, failureLoopAudio, alarmAudio, accessGrantedAudio, electricGlitchAudio];
+    const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
     const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
@@ -2022,6 +2026,8 @@
     const MIX = Object.freeze({
       alarm: 0.018,
       errorVoice: 0.86,
+      failureLoop: 0.46,
+      accessGrantedVoice: 0.88,
       electricGlitch: 0.16,
       blackboxVoice: 1,
       scannerNoise: 0.12,
@@ -2566,6 +2572,27 @@
       return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration, fallback);
     }
 
+    async function startFailureLoop() {
+      if (!soundReady) return () => {};
+      try {
+        failureLoopAudio.pause();
+        failureLoopAudio.currentTime = 0;
+        failureLoopAudio.volume = safeVolume(MIX.failureLoop);
+        await failureLoopAudio.play();
+      } catch (error) {
+        console.warn("Failure loop play failed", error && (error.name || error.message || error));
+        return () => {};
+      }
+      return () => {
+        failureLoopAudio.pause();
+        try { failureLoopAudio.currentTime = 0; } catch (_) {}
+      };
+    }
+
+    function playAccessGrantedVoice(runId) {
+      return playMedia(accessGrantedAudio, MIX.accessGrantedVoice, runId, 1800);
+    }
+
     async function playWarningAudioSequence(runId) {
       if (!soundReady) {
         if (!await wait(warningStaticDelay, runId)) return false;
@@ -2627,15 +2654,25 @@
     async function playFailureSequence(runId) {
       if (activeRun !== runId) return;
 
+      let stopFailureLoop = () => {};
       setPhase("warning");
-      if (!await playWarningAudioSequence(runId)) return;
+      stopFailureLoop = await startFailureLoop();
+      if (!await playWarningAudioSequence(runId)) {
+        stopFailureLoop();
+        return;
+      }
 
       setStatic(false);
       setPhase("blackout");
-      if (!await playSignalAudio(runId)) return;
+      if (!await playSignalAudio(runId)) {
+        stopFailureLoop();
+        return;
+      }
 
       setStatic(false);
+      stopFailureLoop();
       setPhase("granted");
+      playAccessGrantedVoice(runId);
       if (!await wait(grantedDuration, runId)) return;
 
       jumpToDownload();
