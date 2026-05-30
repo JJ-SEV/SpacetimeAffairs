@@ -466,6 +466,7 @@
 
     body[data-phase="blackout"] .blackout {
       opacity: 1;
+      pointer-events: auto;
     }
 
     body[data-phase="granted"] .access-granted {
@@ -1150,12 +1151,59 @@
       text-transform: uppercase;
     }
 
-    .blackbox-head::after {
-      content: "";
-      width: 74px;
-      height: 5px;
-      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
-      box-shadow: 0 0 18px rgba(130,255,210,.44);
+    .blackbox-replay,
+    .blackbox-continue {
+      position: relative;
+      z-index: 5;
+      min-height: 38px;
+      border: 1px solid rgba(101,213,255,.46);
+      border-radius: 4px;
+      background: rgba(2,8,13,.72);
+      color: rgba(236,248,243,.92);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0;
+      cursor: pointer;
+      box-shadow: 0 0 24px rgba(101,213,255,.12);
+    }
+
+    .blackbox-replay {
+      min-width: 72px;
+      padding: 0 12px;
+    }
+
+    .blackbox-continue {
+      position: absolute;
+      right: max(22px, env(safe-area-inset-right));
+      bottom: max(22px, env(safe-area-inset-bottom));
+      min-width: 168px;
+      min-height: 46px;
+      padding: 0 18px;
+      border-color: rgba(255,159,69,.62);
+      background: linear-gradient(180deg, rgba(255,123,53,.94), rgba(181,72,32,.96));
+      color: #fff;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity .42s ease, transform .42s cubic-bezier(.16,.78,.18,1), filter .18s ease;
+    }
+
+    body[data-phase="blackout"] .blackbox-continue {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: .72s;
+    }
+
+    .blackbox-replay:hover,
+    .blackbox-continue:hover {
+      filter: brightness(1.08);
+    }
+
+    .blackbox-replay:disabled,
+    .blackbox-continue:disabled {
+      cursor: wait;
+      opacity: .52;
+      filter: saturate(.72);
     }
 
     .blackbox-body {
@@ -1881,6 +1929,14 @@
       .readout span { margin-top: 4px; font-size: 14px; }
       .complete { margin-top: 12px; }
       .audio-actions button { flex: 1 1 180px; }
+      .blackbox-head { gap: 10px; }
+      .blackbox-replay { min-width: 64px; }
+      .blackbox-continue {
+        left: 18px;
+        right: 18px;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        width: auto;
+      }
     }
 
     @keyframes recordEnterMobile {
@@ -1955,7 +2011,10 @@
     <section class="blackout">
       <img class="blackbox-bg" src="assets/ai-blackbox-code-glitch-bg-v1.png" alt="" loading="eager" decoding="async">
       <div class="blackbox-window">
-        <div class="blackbox-head">Black Box Audio</div>
+        <div class="blackbox-head">
+          <span>Black Box Audio</span>
+          <button class="blackbox-replay" type="button" data-blackbox-replay>重播</button>
+        </div>
         <div class="blackbox-body">
           <b>Signal Interruption</b>
           <strong>黑匣音频接入中</strong>
@@ -1965,6 +2024,7 @@
           </div>
         </div>
       </div>
+      <button class="blackbox-continue" type="button" data-blackbox-continue>继续部署航道</button>
     </section>
     <section class="access-granted">
       <img class="access-gate-bg" src="assets/ai-access-gate-v1.png" alt="" loading="eager" decoding="async">
@@ -2005,6 +2065,8 @@
     const gateCopy = document.querySelector("[data-gate-copy]");
     const gateStatus = document.querySelector("[data-gate-status]");
     const signalAudio = document.querySelector("#xia-signal");
+    const blackboxReplayButton = document.querySelector("[data-blackbox-replay]");
+    const blackboxContinueButton = document.querySelector("[data-blackbox-continue]");
     const failureLoopAudio = document.querySelector("#failure-loop");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
@@ -2021,7 +2083,6 @@
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
     const blackboxOpenDelay = 820;
-    const blackboxAudioDuration = 8590;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
@@ -2049,6 +2110,7 @@
     let sequenceTimers = [];
     let activeRun = 0;
     let jumped = false;
+    let blackboxPlaybackRun = 0;
     let errorFrame = 0;
     let errorStartTime = 0;
     let errorSparks = [];
@@ -2659,31 +2721,92 @@
       return soundReady;
     }
 
-    async function playSignalAudio(runId) {
-      if (!soundReady) {
-        return wait(skipBlackboxDuration, runId);
+    function setBlackboxControls(enabled) {
+      if (blackboxReplayButton) {
+        blackboxReplayButton.disabled = !enabled || !soundReady;
       }
+      if (blackboxContinueButton) {
+        blackboxContinueButton.disabled = !enabled;
+      }
+    }
+
+    function stopBlackboxVoice() {
+      blackboxPlaybackRun += 1;
+      if (!signalAudio) return;
+      signalAudio.onended = null;
+      signalAudio.pause();
+      try { signalAudio.currentTime = 0; } catch (_) {}
+    }
+
+    async function replayBlackboxVoice(runId) {
+      if (!signalAudio || !soundReady || activeRun !== runId || document.body.dataset.phase !== "blackout") return false;
+      const playbackRun = blackboxPlaybackRun + 1;
+      blackboxPlaybackRun = playbackRun;
+      try {
+        signalAudio.onended = null;
+        signalAudio.pause();
+        signalAudio.currentTime = 0;
+        signalAudio.volume = MIX.blackboxVoice;
+        signalAudio.onended = () => {
+          if (blackboxPlaybackRun === playbackRun && blackboxReplayButton) {
+            blackboxReplayButton.disabled = false;
+          }
+        };
+        await signalAudio.play();
+        return true;
+      } catch (error) {
+        console.warn("Blackbox replay failed", error && (error.name || error.message || error));
+        soundReady = false;
+        setBlackboxControls(true);
+        return false;
+      }
+    }
+
+    async function playSignalAudio(runId) {
       return new Promise(async (resolve) => {
         let resolved = false;
-        const finish = () => {
+        const finish = (ok = true) => {
           if (resolved) return;
           resolved = true;
-          resolve(activeRun === runId);
+          cleanup();
+          stopBlackboxVoice();
+          resolve(ok && activeRun === runId);
         };
-        try {
-          if (!await wait(blackboxOpenDelay, runId)) {
-            resolve(false);
-            return;
-          }
-          signalAudio.currentTime = 0;
-          signalAudio.volume = MIX.blackboxVoice;
-          signalAudio.onended = finish;
-          await signalAudio.play();
-          schedule(finish, blackboxAudioDuration + 500);
-        } catch (_) {
-          soundReady = false;
+        const replayHandler = () => {
+          replayBlackboxVoice(runId);
+        };
+        const continueHandler = () => {
+          finish(true);
+        };
+        const cleanup = () => {
+          if (blackboxReplayButton) blackboxReplayButton.removeEventListener("click", replayHandler);
+          if (blackboxContinueButton) blackboxContinueButton.removeEventListener("click", continueHandler);
+          setBlackboxControls(false);
+        };
+
+        if (!blackboxContinueButton) {
           const ok = await wait(skipBlackboxDuration, runId);
-          resolve(ok);
+          finish(ok);
+          return;
+        }
+
+        if (blackboxReplayButton) blackboxReplayButton.addEventListener("click", replayHandler);
+        blackboxContinueButton.addEventListener("click", continueHandler);
+        setBlackboxControls(true);
+
+        if (!await wait(blackboxOpenDelay, runId)) {
+          finish(false);
+          return;
+        }
+        if (resolved) {
+          return;
+        }
+        if (activeRun !== runId) {
+          finish(false);
+          return;
+        }
+        if (soundReady) {
+          replayBlackboxVoice(runId);
         }
       });
     }
@@ -2761,6 +2884,7 @@
       jumped = false;
       mediaElements.forEach(pauseMedia);
       soundReady = false;
+      setBlackboxControls(false);
 
       const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
       await waitForCriticalAssets();

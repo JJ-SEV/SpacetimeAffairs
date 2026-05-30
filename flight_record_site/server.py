@@ -1173,7 +1173,7 @@ def record_preview_page(submission_id: str) -> bytes:
     <figcaption>飞行纪录预览</figcaption>
   </figure>
   <div class="preview-actions">
-    <a class="button" href="/history?id={esc(row['id'])}">下载历史飞行纪录</a>
+    <a class="button" href="/history?id={esc(row['id'])}">下载飞行纪录</a>
   </div>
 </section>
 """
