@@ -1890,8 +1890,8 @@
   </style>
 </head>
 <body>
-  <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a?v=ce6de9d9" preload="auto"></audio>
-  <audio id="failure-loop" src="assets/error-background-loop-ce6de9d9.m4a?v=ce6de9d9" preload="auto" loop></audio>
+  <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a?v=ce6de9d9v3" preload="auto"></audio>
+  <audio id="failure-loop" src="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
   <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
   <audio id="access-granted-voice" src="assets/access-granted-system.m4a?v=zarvox1" preload="auto"></audio>
@@ -2020,9 +2020,11 @@
     const errorVoiceDuration = 3300;
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
+    const blackboxOpenDelay = 820;
     const blackboxAudioDuration = 8590;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
+    const accessGrantedVoiceDelay = 1850;
     const MIX = Object.freeze({
       alarm: 0.018,
       errorVoice: 0.86,
@@ -2030,10 +2032,10 @@
       accessGrantedVoice: 0.88,
       electricGlitch: 0.16,
       blackboxVoice: 1,
-      scannerNoise: 0.12,
-      scannerServo: 0.046,
-      stampThump: 0.16,
-      stampPing: 0.062,
+      scannerNoise: 0.18,
+      scannerServo: 0.07,
+      stampThump: 0.38,
+      stampPing: 0.1,
       fallbackAlarm: 0.004,
       unlockTone: 0.01,
       crackleNoise: 0.018,
@@ -2307,22 +2309,24 @@
       if (!audioCtx || !soundReady) return;
       const now = audioCtx.currentTime;
       const source = audioCtx.createBufferSource();
-      source.buffer = makeNoiseBuffer(2.8, .65);
+      source.buffer = makeNoiseBuffer(5.6, .72);
       const filter = audioCtx.createBiquadFilter();
       const gain = audioCtx.createGain();
       filter.type = "bandpass";
       filter.frequency.setValueAtTime(220, now);
       filter.frequency.exponentialRampToValueAtTime(3600, now + 1.05);
       filter.frequency.exponentialRampToValueAtTime(520, now + 2.65);
+      filter.frequency.exponentialRampToValueAtTime(980, now + 5.35);
       filter.Q.value = 1.8;
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(MIX.scannerNoise, now + .08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.75);
+      gain.gain.exponentialRampToValueAtTime(MIX.scannerNoise * .56, now + 3.35);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 5.55);
       source.connect(filter);
       filter.connect(gain);
       gain.connect(audioCtx.destination);
       source.start(now);
-      source.stop(now + 2.85);
+      source.stop(now + 5.62);
 
       const servo = audioCtx.createOscillator();
       const servoGain = audioCtx.createGain();
@@ -2330,15 +2334,40 @@
       servo.frequency.setValueAtTime(92, now);
       servo.frequency.exponentialRampToValueAtTime(285, now + 1.35);
       servo.frequency.exponentialRampToValueAtTime(155, now + 2.55);
+      servo.frequency.exponentialRampToValueAtTime(118, now + 5.2);
       servoGain.gain.setValueAtTime(0.0001, now);
       servoGain.gain.exponentialRampToValueAtTime(MIX.scannerServo, now + .08);
-      servoGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.7);
+      servoGain.gain.exponentialRampToValueAtTime(MIX.scannerServo * .42, now + 3.2);
+      servoGain.gain.exponentialRampToValueAtTime(0.0001, now + 5.45);
       servo.connect(servoGain);
       servoGain.connect(audioCtx.destination);
       servo.start(now);
-      servo.stop(now + 2.8);
+      servo.stop(now + 5.5);
+
+      const metalClack = (at, gainLevel, duration = .1) => {
+        const hit = audioCtx.createBufferSource();
+        const hitFilter = audioCtx.createBiquadFilter();
+        const hitGain = audioCtx.createGain();
+        hit.buffer = makeNoiseBuffer(duration, .9);
+        hitFilter.type = "bandpass";
+        hitFilter.frequency.setValueAtTime(980, at);
+        hitFilter.Q.value = 7;
+        hitGain.gain.setValueAtTime(0.0001, at);
+        hitGain.gain.exponentialRampToValueAtTime(gainLevel, at + .008);
+        hitGain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+        hit.connect(hitFilter);
+        hitFilter.connect(hitGain);
+        hitGain.connect(audioCtx.destination);
+        hit.start(at);
+        hit.stop(at + duration + .02);
+      };
 
       const impact = now + 3.45;
+      metalClack(now + .34, .055, .055);
+      metalClack(now + 1.16, .05, .06);
+      metalClack(now + 2.12, .06, .07);
+      metalClack(impact, .24, .16);
+      metalClack(impact + .18, .12, .08);
       beep(impact, 84, .22, MIX.stampThump, "sine");
       beep(impact + .03, 1640, .08, MIX.stampPing, "triangle");
       beep(impact + .12, 2360, .06, MIX.stampPing * .72, "triangle");
@@ -2638,6 +2667,10 @@
           resolve(activeRun === runId);
         };
         try {
+          if (!await wait(blackboxOpenDelay, runId)) {
+            resolve(false);
+            return;
+          }
           signalAudio.currentTime = 0;
           signalAudio.volume = MIX.blackboxVoice;
           signalAudio.onended = finish;
@@ -2672,7 +2705,9 @@
       setStatic(false);
       stopFailureLoop();
       setPhase("granted");
-      playAccessGrantedVoice(runId);
+      schedule(() => {
+        if (activeRun === runId) playAccessGrantedVoice(runId);
+      }, accessGrantedVoiceDelay);
       if (!await wait(grantedDuration, runId)) return;
 
       jumpToDownload();
