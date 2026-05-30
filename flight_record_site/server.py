@@ -1016,9 +1016,8 @@ def flight_confirm_page(submission_id: str) -> bytes:
     <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
     <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
   </dl>
-  <div class="screen-warning">
-    <b>截图保存编号</b>
-    <span>请现在截图保存编号。后续自证、查看进度和进入图库都需要用到这个编号。</span>
+  <div class="screen-warning simple-warning">
+    <span>请截图保存编号</span>
   </div>
   <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post">
     <input type="hidden" name="id" value="{esc(row['id'])}">
@@ -1530,11 +1529,9 @@ def submitted_page(submission_id: str) -> bytes:
   </div>
   <div class="confirm-grid">
     <div>
-      <p class="muted">请现在截图保存编号。截完图后，再点确认进入审核进度页。</p>
       <div class="id-chip">{esc(row['id'])}</div>
-      <div class="screen-warning">
-        <b>截图确认</b>
-        <span>审核与后续生成飞行纪录都需要用到这个编号。</span>
+      <div class="screen-warning simple-warning">
+        <span>请截图保存编号</span>
       </div>
     </div>
     <div class="confirm-copy">

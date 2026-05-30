@@ -997,6 +997,11 @@ button.danger {
   margin-top: 18px;
 }
 
+.simple-warning span {
+  color: var(--gold);
+  font-weight: 800;
+}
+
 .confirm-copy {
   display: grid;
   align-content: space-between;
