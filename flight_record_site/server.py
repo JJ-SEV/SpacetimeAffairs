@@ -1521,10 +1521,11 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     }});
     state.textContent = clean.length === 8 ? "CLEARANCE READY" : `SYNC ${{clean.length}}/8`;
     if (result.rejected && showError) {{
+      recordPasswordFailure(true);
       flashInvalid();
-        return;
-      }}
+      return;
     }}
+  }}
     function showPasswordHint() {{
       if (window.confirm("是否解锁Pilot ID：XIAYIZHOU/CALEB 密码提示。")) {{
         window.alert("我最重要的人的生日");
