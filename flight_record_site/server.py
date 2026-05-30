@@ -44,9 +44,9 @@ _ADMIN_PASSWORD_CACHE: str | None = None
 _ADDRESS_SUGGEST_CACHE: dict[str, list[dict[str, object]]] = {}
 _ADDRESS_GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 DOWNLOAD_UNLOCK_TZ = ZoneInfo("Asia/Shanghai")
-DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 12, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
+DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 0, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
 DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
-DOWNLOAD_UNLOCK_LABEL = "2026-06-13 12:00 UTC+08:00"
+DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 UTC+08:00"
 LOCKED_PREVIEW_MAX_DIMENSION = 1400
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -579,6 +579,10 @@ def normalize_contact(contact: str) -> str:
     return "".join(contact.split()).lower()
 
 
+def normalize_submission_id(value: str) -> str:
+    return "".join(ch for ch in value.strip().upper() if ch.isalnum())[:12]
+
+
 VALID_PILOT_IDS = {"CALEB", "XIAYIZHOU"}
 
 
@@ -764,11 +768,11 @@ def download_record_html(submission_id: str) -> str:
     )
 
 
-def download_countdown_script() -> str:
+def query_countdown_script() -> str:
     return """
 <script>
 (() => {
-  const gate = document.querySelector("[data-download-unlock]");
+  const gate = document.querySelector("[data-query-unlock]");
   if (!gate) return;
   const target = Date.parse(gate.dataset.unlockAt || "");
   if (!Number.isFinite(target)) return;
@@ -779,9 +783,9 @@ def download_countdown_script() -> str:
     minutes: gate.querySelector('[data-countdown-unit="minutes"]'),
     seconds: gate.querySelector('[data-countdown-unit="seconds"]')
   };
-  const actions = document.querySelector("[data-unlock-actions]");
-  const locked = document.querySelector("[data-locked-actions]");
-  const copy = gate.querySelector("[data-unlock-copy]");
+  const button = gate.querySelector("[data-query-submit]");
+  const copy = gate.querySelector("[data-query-copy]");
+  const countdown = gate.querySelector("[data-query-countdown]");
   const pad = (value) => String(value).padStart(2, "0");
 
   function setOpen() {
@@ -790,9 +794,12 @@ def download_countdown_script() -> str:
     Object.values(units).forEach((unit) => {
       if (unit) unit.textContent = "00";
     });
-    if (actions) actions.hidden = false;
-    if (locked) locked.hidden = true;
-    if (copy) copy.textContent = "下载窗口已开放，可以保存原图或 PDF。";
+    if (button) {
+      button.disabled = false;
+      button.textContent = "查看状态";
+    }
+    if (countdown) countdown.hidden = true;
+    if (copy) copy.textContent = "查询已开放，可以查看审核状态并进入下载。";
   }
 
   function render() {
@@ -825,61 +832,318 @@ def download_countdown_script() -> str:
 
 
 def download_countdown_html(row: sqlite3.Row, png_name: str, pdf_name: str) -> str:
-    unlocked = downloads_unlocked()
-    gate_state = "open" if unlocked else "locked"
-    locked_hidden = " hidden" if unlocked else ""
-    actions_hidden = "" if unlocked else " hidden"
-    copy = (
-        "下载窗口已开放，可以保存原图或 PDF。"
-        if unlocked
-        else f"原图将于 {DOWNLOAD_UNLOCK_LABEL} 开放。在此之前只开放页面预览。"
-    )
+    if not downloads_unlocked():
+        return f"""
+  <div class="actions locked-actions">
+    <button class="button disabled" type="button" disabled>下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
+  </div>
+"""
     png_link = (
         f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=png&source=player" '
         f'download="{png_name}">下载原图 PNG</a>'
         if png_name
         else ""
     )
+    pdf_link = (
+        f'<a class="button ghost download-button" href="/download?id={esc(row["id"])}&type=pdf&source=player" '
+        f'download="{pdf_name}">下载 PDF</a>'
+        if pdf_name
+        else ""
+    )
     return f"""
-  <div class="unlock-gate {gate_state}" data-download-unlock data-unlock-at="{DOWNLOAD_UNLOCK_ISO}">
-    <div class="unlock-copy-block">
-      <p class="eyebrow">DOWNLOAD WINDOW</p>
-      <h3>{"图片下载已开放" if unlocked else "原图下载倒计时"}</h3>
-      <p class="muted unlock-copy" data-unlock-copy>{esc(copy)}</p>
-    </div>
-    <div class="countdown-grid" aria-label="距离原图下载开放">
-      <span><b data-countdown-unit="days">00</b><em>天</em></span>
-      <span><b data-countdown-unit="hours">00</b><em>时</em></span>
-      <span><b data-countdown-unit="minutes">00</b><em>分</em></span>
-      <span><b data-countdown-unit="seconds">00</b><em>秒</em></span>
-    </div>
+  <div class="download-ready">
+    <p class="muted">下载窗口已开放，可以保存原图或 PDF。</p>
   </div>
-  <div class="actions locked-actions" data-locked-actions{locked_hidden}>
-    <button class="button disabled" type="button" disabled>原图下载未开放</button>
-  </div>
-  <div class="actions download-actions" data-unlock-actions{actions_hidden}>
+  <div class="actions download-actions">
     {png_link}
-    <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
+    {pdf_link}
   </div>
-{download_countdown_script()}
 """
 
 
 def download_locked_page(submission_id: str) -> bytes:
-    back_href = f"/status?id={esc(submission_id)}" if submission_id else "/"
+    back_href = f"/history?id={esc(submission_id)}#query" if submission_id else "/history#query"
     body = f"""
 <section class="panel wide">
   <div class="section-head">
     <span>LOCK</span>
     <h2>原图下载尚未开放</h2>
   </div>
-  <p class="muted">原图下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回状态页预览，不会开放原文件下载。</p>
+  <p class="muted">查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回查询页查看倒计时。</p>
   <div class="actions status-actions">
-    <a class="button ghost" href="{back_href}">返回预览页</a>
+    <a class="button ghost" href="{back_href}">返回查询页</a>
   </div>
 </section>
 """
     return layout("下载尚未开放", body)
+
+
+def address_picker_script() -> str:
+    return """
+<script>
+(() => {
+  const form = document.querySelector(".destination-form");
+  if (!form) return;
+  const input = form.querySelector(".address-input");
+  const lat = form.querySelector(".address-lat");
+  const lon = form.querySelector(".address-lon");
+  const label = form.querySelector(".address-label");
+  const suggest = form.querySelector(".address-suggest");
+  const hint = form.querySelector(".address-hint");
+  let timer;
+  let requestId = 0;
+
+  function clearSelection() {
+    lat.value = "";
+    lon.value = "";
+    label.value = "";
+    input.classList.remove("has-location");
+    hint.textContent = "输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。";
+  }
+
+  function hideSuggest() {
+    suggest.hidden = true;
+    suggest.innerHTML = "";
+  }
+
+  function renderSuggest(items) {
+    suggest.innerHTML = "";
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "address-empty";
+      empty.textContent = "没有匹配到候选；可以继续输入、直接使用这段文字，或清空地址随机生成专属坐标。";
+      suggest.append(empty);
+      suggest.hidden = false;
+      return;
+    }
+    for (const item of items) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "address-option";
+      button.dataset.lat = item.lat ?? "";
+      button.dataset.lon = item.lon ?? "";
+      button.dataset.label = item.address || item.name || "";
+
+      const title = document.createElement("b");
+      title.textContent = item.name || item.address || "地点候选";
+      const detail = document.createElement("span");
+      detail.textContent = item.address || "";
+      const meta = document.createElement("em");
+      meta.textContent = item.source === "amap" ? "MAP LINK" : (item.source === "custom" ? "CUSTOM" : "LOCAL INDEX");
+
+      button.append(title, detail, meta);
+      button.addEventListener("click", () => {
+        input.value = item.address || item.name || input.value;
+        lat.value = button.dataset.lat;
+        lon.value = button.dataset.lon;
+        label.value = button.dataset.label;
+        input.classList.toggle("has-location", Boolean(lat.value && lon.value));
+        hint.textContent = lat.value && lon.value
+          ? `已锁定地图候选：${button.dataset.label}`
+          : "已选择文字候选；生成时会继续尝试解析地图坐标。";
+        hideSuggest();
+      });
+      suggest.append(button);
+    }
+    suggest.hidden = false;
+  }
+
+  input.addEventListener("input", () => {
+    clearSelection();
+    const query = input.value.trim();
+    clearTimeout(timer);
+    if (query.length < 2) {
+      hideSuggest();
+      return;
+    }
+    const current = ++requestId;
+    timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/address-suggest?q=${encodeURIComponent(query)}`, {headers: {"Accept": "application/json"}});
+        if (!response.ok || current !== requestId) return;
+        const data = await response.json();
+        renderSuggest(Array.isArray(data.items) ? data.items : []);
+      } catch (error) {
+        if (current === requestId) hideSuggest();
+      }
+    }, 260);
+  });
+})();
+</script>
+"""
+
+
+def destination_page(message: str = "") -> bytes:
+    notice = f'<div class="notice">{esc(message)}</div>' if message else ""
+    body = f"""
+{notice}
+<section class="command-deck destination-command">
+  <div class="radar-scope" aria-hidden="true">
+    <span></span>
+  </div>
+  <div class="mission-copy">
+    <p class="eyebrow">TARGET CLEARANCE</p>
+    <h2>规划飞行航道</h2>
+  </div>
+  <aside class="quick-gallery">
+    <p class="eyebrow">ARCHIVE ACCESS</p>
+    <form class="inline-query" action="/gallery" method="get">
+      <input name="id" maxlength="12" placeholder="输入查询码" required>
+      <button type="submit">查询码登录</button>
+    </form>
+  </aside>
+</section>
+
+<form class="panel wide destination-form" action="/flight/create" method="post">
+  <div class="section-head">
+    <span>01</span>
+    <h2>输入目标和目的地</h2>
+  </div>
+  <label>目标
+    <input name="destination_name" maxlength="24" placeholder="输入飞行纪录上的目标姓名" required>
+  </label>
+  <label class="address-field">目的地
+    <input name="address" class="address-input" maxlength="160" placeholder="输入城市、区县、道路；不输入则自动搜索目标定位，生成专属坐标" autocomplete="off">
+    <input type="hidden" name="address_lat" class="address-lat">
+    <input type="hidden" name="address_lon" class="address-lon">
+    <input type="hidden" name="address_label" class="address-label">
+    <span class="field-hint address-hint">输入后会显示地点联想；选中候选时会按地图位置生成坐标。不输入地址则自动搜索目标定位，生成专属坐标。</span>
+    <div class="address-suggest" hidden></div>
+  </label>
+  <div class="commit-row">
+    <button type="submit">确认</button>
+    <p class="commit-warning"><b>请确认信息</b><span>确认后会生成本次飞行纪录预览和查询码。</span></p>
+  </div>
+</form>
+{address_picker_script()}
+"""
+    return layout("规划飞行航道", body, body_class="home-body")
+
+
+def flight_loading_page(submission_id: str) -> bytes:
+    redirect_to = f"/record?id={esc(submission_id)}"
+    body = f"""
+<main class="auth-shell loading-shell">
+  <section class="loading-screen">
+    <div class="loading-grid" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="loading-core" aria-hidden="true">
+      <span class="loading-ring ring-a"></span>
+      <span class="loading-ring ring-b"></span>
+      <span class="loading-axis axis-a"></span>
+      <span class="loading-axis axis-b"></span>
+      <span class="loading-dot"></span>
+    </div>
+    <p class="eyebrow">MISSION LOCKED</p>
+    <h1>生成飞行纪录</h1>
+    <div class="loading-bar" aria-hidden="true"><span></span></div>
+    <p class="loading-copy">正在同步目标与目的地坐标</p>
+    <a class="button ghost loading-fallback" href="{redirect_to}">查看预览</a>
+  </section>
+</main>
+<script>
+  setTimeout(() => {{
+    window.location.replace("{redirect_to}");
+  }}, 1500);
+</script>
+"""
+    return auth_layout("生成飞行纪录", body)
+
+
+def record_preview_page(submission_id: str) -> bytes:
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None or not row["png_filename"]:
+        return destination_page("没找到这个飞行纪录。")
+    preview_token = quote(str(row["generated_at"] or row["id"]))
+    body = f"""
+<section class="panel wide success-panel">
+  <div class="section-head">
+    <span>02</span>
+    <h2>飞行纪录预览</h2>
+  </div>
+  <dl class="meta">
+    <div><dt>查询码</dt><dd>{esc(row['id'])}</dd></div>
+    <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
+    <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
+  </dl>
+  <figure class="record-preview-frame" id="record-preview">
+    <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录预览" loading="eager" onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+    <p class="preview-fallback" hidden>预览加载失败，请稍后再试。</p>
+    <figcaption>飞行纪录预览</figcaption>
+  </figure>
+  <div class="preview-actions">
+    <a class="button" href="/history?id={esc(row['id'])}">下载历史飞行纪录</a>
+    <a class="button ghost" href="/">重新规划</a>
+  </div>
+</section>
+"""
+    return layout("飞行纪录预览", body, body_class="home-body")
+
+
+def gallery_page(submission_id: str) -> bytes:
+    if not downloads_unlocked():
+        return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None:
+        return history_page("没找到这个查询码。")
+    if row["status"] != "approved":
+        status_text = {
+            "draft": "这个查询码还没有提交自证。",
+            "pending": "自证正在审核中。",
+            "rejected": "自证审核未通过。",
+        }.get(row["status"], "这个查询码暂时不能进入图库。")
+        note = f"<p class='muted'>{esc(row['review_note'])}</p>" if row["review_note"] else ""
+        action = (
+            f'<a class="button" href="/history?id={esc(row["id"])}">提交自证</a>'
+            if row["status"] in {"draft", "rejected"}
+            else '<a class="button ghost" href="/history#query">返回查询页</a>'
+        )
+        body = f"""
+<section class="panel wide">
+  <div class="section-head">
+    <span>ID</span>
+    <h2>{esc(row['id'])}</h2>
+    {status_badge(row['status'])}
+  </div>
+  <p class="muted">{status_text}</p>
+  {note}
+  <div class="actions status-actions">
+    {action}
+  </div>
+</section>
+"""
+        return layout("图库状态", body, body_class="home-body")
+    if not row["png_filename"]:
+        return status_page(row["id"])
+    pdf_name = esc(Path(row["pdf_filename"]).name) if row["pdf_filename"] else ""
+    png_name = esc(Path(row["png_filename"]).name)
+    preview_token = quote(str(row["generated_at"] or row["id"]))
+    body = f"""
+<section class="panel wide success-panel">
+  <div class="section-head">
+    <span>LIB</span>
+    <h2>飞行纪录图库</h2>
+    {status_badge(row['status'])}
+  </div>
+  <dl class="meta">
+    <div><dt>查询码</dt><dd>{esc(row['id'])}</dd></div>
+    <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
+    <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
+  </dl>
+  <div class="gallery-grid">
+    <article class="gallery-card">
+      <figure class="record-preview-frame">
+        <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录图预览" loading="eager">
+        <figcaption>飞行纪录图</figcaption>
+      </figure>
+      {download_countdown_html(row, png_name, pdf_name)}
+    </article>
+  </div>
+  <p class="muted gallery-note">追加图片开放后，会显示在同一个图库里。</p>
+</section>
+"""
+    return layout("飞行纪录图库", body, body_class="home-body")
 
 
 def layout(title: str, body: str, admin: bool = False, body_class: str = "") -> bytes:
@@ -934,8 +1198,26 @@ def auth_layout(title: str, body: str) -> bytes:
     return page.encode("utf-8")
 
 
-def public_page(message: str = "") -> bytes:
+def history_page(message: str = "", submission_id: str = "") -> bytes:
     notice = f'<div class="notice">{esc(message)}</div>' if message else ""
+    clean_id = normalize_submission_id(submission_id)
+    hidden_id = f'<input type="hidden" name="id" value="{esc(clean_id)}">' if clean_id else ""
+    query_unlocked = downloads_unlocked()
+    query_state = "open" if query_unlocked else "locked"
+    query_button_disabled = "" if query_unlocked else " disabled"
+    query_button_text = "查看状态" if query_unlocked else "等待开放"
+    query_copy = (
+        "查询已开放，可以查看审核状态并进入下载。"
+        if query_unlocked
+        else "6月13日 00:00 后开放查询，届时可查看审核状态并进入下载。"
+    )
+    countdown_hidden = " hidden" if query_unlocked else ""
+    current_code = f"""
+    <div class="screen-warning compact-warning">
+      <b>当前查询码</b>
+      <span>{esc(clean_id)}</span>
+    </div>
+""" if clean_id else ""
     body = f"""
 {notice}
 <section class="command-deck">
@@ -943,21 +1225,23 @@ def public_page(message: str = "") -> bytes:
     <span></span>
   </div>
   <div class="mission-copy">
-    <p class="eyebrow">TARGET CLEARANCE</p>
-    <h2>飞行纪录签发控制台</h2>
+    <p class="eyebrow">ARCHIVE CLEARANCE</p>
+    <h2>历史飞行纪录下载</h2>
   </div>
   <div class="signal-grid">
-    <div><b>QUEUE</b><span>STANDBY</span></div>
     <div><b>VERIFY</b><span>MANUAL</span></div>
-    <div><b>EXPORT</b><span>PDF</span></div>
+    <div><b>QUERY</b><span>CODE</span></div>
+    <div><b>GALLERY</b><span>PNG</span></div>
   </div>
 </section>
 <section class="workspace two">
   <form class="panel" action="/submit" method="post" enctype="multipart/form-data">
+    {hidden_id}
     <div class="section-head">
       <span>01</span>
       <h2>上传自证</h2>
     </div>
+    {current_code}
     <label>用户ID（小红书号或邮箱）
       <input name="contact" maxlength="80" placeholder="请输入小红书号或邮箱" required>
     </label>
@@ -970,19 +1254,33 @@ def public_page(message: str = "") -> bytes:
     <button type="submit">提交审核</button>
   </form>
 
-  <form class="panel" id="query" action="/status" method="get">
+  <form class="panel query-panel {query_state}" id="query" action="/gallery" method="get" data-query-unlock data-unlock-at="{DOWNLOAD_UNLOCK_ISO}">
     <div class="section-head">
       <span>02</span>
       <h2>查看进度</h2>
     </div>
     <label>提交编号
-      <input name="id" placeholder="请输入提交编号" required>
+      <input name="id" value="{esc(clean_id)}" placeholder="请输入提交编号" required>
     </label>
-    <button type="submit">查看状态</button>
+    <div class="query-unlock" aria-live="polite">
+      <p class="muted" data-query-copy>{esc(query_copy)}</p>
+      <div class="countdown-grid query-countdown" data-query-countdown aria-label="距离查看状态开放"{countdown_hidden}>
+        <span><b data-countdown-unit="days">00</b><em>天</em></span>
+        <span><b data-countdown-unit="hours">00</b><em>时</em></span>
+        <span><b data-countdown-unit="minutes">00</b><em>分</em></span>
+        <span><b data-countdown-unit="seconds">00</b><em>秒</em></span>
+      </div>
+    </div>
+    <button type="submit" data-query-submit{query_button_disabled}>{query_button_text}</button>
   </form>
 </section>
+{query_countdown_script()}
 """
-    return layout("飞行纪录审核台", body, body_class="home-body")
+    return layout("历史飞行纪录下载", body, body_class="home-body")
+
+
+def public_page(message: str = "") -> bytes:
+    return history_page(message)
 
 
 def help_page() -> bytes:
@@ -1051,7 +1349,7 @@ def player_gate_page(message: str = "") -> bytes:
           <span></span><span></span><span></span><span></span>
           <span></span><span></span><span></span><span></span>
         </div>
-        <button class="auth-submit" type="submit">解锁飞行通道</button>
+        <button class="auth-submit" type="submit">登录</button>
       </form>
     </div>
   </section>
@@ -1235,8 +1533,8 @@ def submitted_page(submission_id: str) -> bytes:
         <div><dt>自证文件</dt><dd>{proof_summary_html(row)}</dd></div>
       </dl>
       <div class="confirm-actions">
-        <a class="button confirm-button" href="/status?id={esc(row['id'])}">我已截图，查看审核进度</a>
-        <a class="button ghost confirm-button" href="/#query">返回查询页</a>
+        <a class="button confirm-button" href="/gallery?id={esc(row['id'])}">我已截图，查看审核进度</a>
+        <a class="button ghost confirm-button" href="/history#query">返回查询页</a>
       </div>
     </div>
   </div>
@@ -1250,6 +1548,8 @@ def status_badge(status: str) -> str:
 
 
 def status_page(submission_id: str) -> bytes:
+    if not downloads_unlocked():
+        return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
         return public_page("没找到这个提交编号。")
@@ -1407,7 +1707,7 @@ def status_page(submission_id: str) -> bytes:
   </dl>
   {note}
   <div class="actions status-actions">
-    <a class="button ghost" href="/#query">返回查询页</a>
+    <a class="button ghost" href="/history#query">返回查询页</a>
   </div>
 </section>
 {customize}
@@ -1417,7 +1717,7 @@ def status_page(submission_id: str) -> bytes:
 
 
 def admin_page() -> bytes:
-    rows = db_rows("SELECT * FROM submissions ORDER BY created_at DESC")
+    rows = db_rows("SELECT * FROM submissions WHERE status != 'draft' ORDER BY created_at DESC")
     cards = []
     for row in rows:
         actions = ""
@@ -1572,7 +1872,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
         if parsed.path == "/":
             if self.is_player():
-                self.send_html(public_page())
+                self.send_html(destination_page())
             else:
                 self.send_html(player_gate_page())
         elif parsed.path == "/help":
@@ -1581,6 +1881,22 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not self.require_player():
                 return
             self.send_html(player_loading_page())
+        elif parsed.path == "/flight/loading":
+            if not self.require_player():
+                return
+            self.send_html(flight_loading_page(normalize_submission_id(qs.get("id", [""])[0])))
+        elif parsed.path == "/record":
+            if not self.require_player():
+                return
+            self.send_html(record_preview_page(normalize_submission_id(qs.get("id", [""])[0])))
+        elif parsed.path == "/history":
+            if not self.require_player():
+                return
+            self.send_html(history_page(submission_id=normalize_submission_id(qs.get("id", [""])[0])))
+        elif parsed.path == "/gallery":
+            if not self.require_player():
+                return
+            self.send_html(gallery_page(normalize_submission_id(qs.get("id", [""])[0])))
         elif parsed.path == "/logout":
             self.redirect(
                 "/",
@@ -1593,7 +1909,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/status":
             if not self.require_player():
                 return
-            self.send_html(status_page(qs.get("id", [""])[0].strip().upper()))
+            self.send_html(status_page(normalize_submission_id(qs.get("id", [""])[0])))
         elif parsed.path == "/admin":
             if not self.require_admin():
                 return
@@ -1654,9 +1970,13 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None:
                 self.send_error(404)
                 return
-            if not self.is_admin() and not downloads_unlocked():
-                self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
-                return
+            if not self.is_admin():
+                if row["status"] != "approved":
+                    self.send_error(403)
+                    return
+                if not downloads_unlocked():
+                    self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
+                    return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not regenerate_record_files(row, force=True):
@@ -1679,9 +1999,13 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None:
                 self.send_error(404)
                 return
-            if not self.is_admin() and not downloads_unlocked():
-                self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
-                return
+            if not self.is_admin():
+                if row["status"] != "approved":
+                    self.send_error(403)
+                    return
+                if not downloads_unlocked():
+                    self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
+                    return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not regenerate_record_files(row, force=True):
@@ -1743,9 +2067,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None:
                 self.send_error(404)
                 return
-            if not self.is_admin() and not downloads_unlocked():
-                self.send_error(403)
-                return
+            if not self.is_admin():
+                if row["status"] != "approved" or not downloads_unlocked():
+                    self.send_error(403)
+                    return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not path.exists() and not regenerate_record_files(row):
@@ -1768,9 +2093,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if row is None:
                 self.send_error(404)
                 return
-            if not self.is_admin() and not downloads_unlocked():
-                self.send_error(403)
-                return
+            if not self.is_admin():
+                if row["status"] != "approved" or not downloads_unlocked():
+                    self.send_error(403)
+                    return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
                 if not path.exists() and not regenerate_record_files(row):
@@ -1801,9 +2127,45 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_html(player_gate_page("飞行员ID或密码不正确，密码为8位数字。"), 403)
                 return
             self.redirect(
-                "/gate/loading",
+                "/",
                 (("Set-Cookie", f"{PLAYER_COOKIE}={player_cookie_token()}; Path=/; HttpOnly; SameSite=Lax"),),
             )
+        elif parsed.path == "/flight/create":
+            if not self.require_player():
+                return
+            form = self.parse_urlencoded()
+            destination_name = form.get("destination_name", "").strip()
+            address = form.get("address", "").strip()
+            address_lat = form.get("address_lat", "").strip()
+            address_lon = form.get("address_lon", "").strip()
+            address_label = form.get("address_label", "").strip()
+            if not destination_name:
+                self.send_html(destination_page("请先输入目标。"), 400)
+                return
+            if address:
+                coord, address_hash = coordinate_from_address(address, address_lat, address_lon, address_label)
+            else:
+                coord, address_hash = random_destination_coordinate()
+            submission_id = uuid.uuid4().hex[:8].upper()
+            png_name, pdf_name = generated_record_names()
+            flight_renderer.generate_record(
+                destination_name=destination_name,
+                destination_coordinate=coord,
+                out_path=GENERATED_DIR / png_name,
+                pdf_path=GENERATED_DIR / pdf_name,
+                show_callsign=True,
+            )
+            db_execute(
+                """
+                INSERT INTO submissions (
+                    id, created_at, status, destination_name, address_hash,
+                    destination_coordinate, png_filename, pdf_filename, generated_at
+                )
+                VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?)
+                """,
+                (submission_id, now_text(), destination_name, address_hash, coord, png_name, pdf_name, now_text()),
+            )
+            self.redirect(f"/flight/loading?id={submission_id}")
         elif parsed.path == "/submit":
             if not self.require_player():
                 return
@@ -1818,45 +2180,80 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_html(public_page("请填写小红书号或邮箱。"), 400)
                 return
             contact_key = normalize_contact(contact)
+            submission_id = normalize_submission_id(form.getfirst("id", ""))
+            existing_row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,)) if submission_id else None
+            if existing_row is not None and existing_row["status"] == "approved":
+                self.redirect(f"/gallery?id={submission_id}")
+                return
             duplicate = db_row(
                 """
                 SELECT id FROM submissions
-                WHERE user_key = ?
-                   OR LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), '')) = ?
+                WHERE (user_key = ?
+                   OR LOWER(REPLACE(REPLACE(TRIM(contact), ' ', ''), char(9), '')) = ?)
+                   AND id != ?
                 LIMIT 1
                 """,
-                (contact_key, contact_key),
+                (contact_key, contact_key, submission_id or ""),
             )
             if duplicate is not None:
                 self.send_html(public_page("这个小红书号或邮箱已经提交过自证。请使用第一次保存的提交编号查询审核进度。"), 400)
                 return
-            submission_id = uuid.uuid4().hex[:8].upper()
-            bond_original, bond_stored = save_uploaded_file(proof_bond, submission_id, "bond")
-            home_original, home_stored = save_uploaded_file(proof_home, submission_id, "home")
-            db_execute(
-                """
-                INSERT INTO submissions (
-                    id, created_at, status, contact, user_id, user_key,
-                    original_filename, stored_filename,
-                    bond_original_filename, bond_stored_filename,
-                    home_original_filename, home_stored_filename
+            if existing_row is not None:
+                bond_original, bond_stored = save_uploaded_file(proof_bond, submission_id, "bond")
+                home_original, home_stored = save_uploaded_file(proof_home, submission_id, "home")
+                db_execute(
+                    """
+                    UPDATE submissions
+                    SET status = 'pending',
+                        contact = ?, user_id = ?, user_key = ?,
+                        original_filename = ?, stored_filename = ?,
+                        bond_original_filename = ?, bond_stored_filename = ?,
+                        home_original_filename = ?, home_stored_filename = ?,
+                        review_note = '自证已提交，等待审核。',
+                        reviewed_at = NULL
+                    WHERE id = ?
+                    """,
+                    (
+                        contact,
+                        contact,
+                        contact_key,
+                        bond_original,
+                        bond_stored,
+                        bond_original,
+                        bond_stored,
+                        home_original,
+                        home_stored,
+                        submission_id,
+                    ),
                 )
-                VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    submission_id,
-                    now_text(),
-                    contact,
-                    contact,
-                    contact_key,
-                    bond_original,
-                    bond_stored,
-                    bond_original,
-                    bond_stored,
-                    home_original,
-                    home_stored,
-                ),
-            )
+            else:
+                submission_id = uuid.uuid4().hex[:8].upper()
+                bond_original, bond_stored = save_uploaded_file(proof_bond, submission_id, "bond")
+                home_original, home_stored = save_uploaded_file(proof_home, submission_id, "home")
+                db_execute(
+                    """
+                    INSERT INTO submissions (
+                        id, created_at, status, contact, user_id, user_key,
+                        original_filename, stored_filename,
+                        bond_original_filename, bond_stored_filename,
+                        home_original_filename, home_stored_filename
+                    )
+                    VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        submission_id,
+                        now_text(),
+                        contact,
+                        contact,
+                        contact_key,
+                        bond_original,
+                        bond_stored,
+                        bond_original,
+                        bond_stored,
+                        home_original,
+                        home_stored,
+                    ),
+                )
             self.redirect(f"/submitted?id={submission_id}")
         elif parsed.path == "/admin/login":
             form = self.parse_urlencoded()

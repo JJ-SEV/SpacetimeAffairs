@@ -1328,6 +1328,34 @@ input[type="file"] {
   font-weight: 800;
 }
 
+.quick-gallery {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(103, 199, 239, 0.24);
+  border-radius: 8px;
+  background: rgba(3, 9, 15, 0.5);
+}
+
+.quick-gallery .eyebrow {
+  margin: 0;
+}
+
+.inline-query {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.inline-query input,
+.inline-query button {
+  min-height: 42px;
+}
+
+.inline-query button {
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -1509,6 +1537,43 @@ dd {
   font-weight: 800;
 }
 
+.query-panel {
+  align-content: start;
+}
+
+.query-unlock {
+  margin: 12px 0 16px;
+  padding: 14px;
+  border: 1px solid rgba(103, 199, 239, 0.26);
+  border-left: 6px solid var(--cyan);
+  border-radius: 8px;
+  background: rgba(4, 10, 16, 0.42);
+}
+
+.query-panel.open .query-unlock {
+  border-left-color: var(--green);
+}
+
+.query-unlock p {
+  margin: 0;
+}
+
+.query-countdown {
+  margin-top: 12px;
+}
+
+.query-countdown span {
+  min-height: 68px;
+}
+
+.query-countdown b {
+  font-size: 26px;
+}
+
+.download-ready p {
+  margin: 0 0 12px;
+}
+
 .download-actions,
 .locked-actions {
   margin-top: 12px;
@@ -1603,6 +1668,7 @@ dd {
   .command-deck,
   .help-console,
   .workspace.two,
+  .inline-query,
   .confirm-grid,
   .unlock-gate,
   .meta {
