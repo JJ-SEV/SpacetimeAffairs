@@ -49,7 +49,7 @@ DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 0, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
 DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
 DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 中国北京时间"
 LOCKED_PREVIEW_MAX_DIMENSION = 1400
-LOCKED_PREVIEW_BADGE_VERSION = "v3"
+LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 
@@ -674,7 +674,7 @@ def locked_preview_path(original_path: Path) -> Path | None:
         overlay = Image.new("RGBA", preview.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
         label = "PREVIEW ONLY"
-        font_size = max(28, min(preview.size) // 16)
+        font_size = max(14, min(preview.size) // 52)
         try:
             font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
         except OSError:
@@ -682,7 +682,7 @@ def locked_preview_path(original_path: Path) -> Path | None:
         bbox = draw.textbbox((0, 0), label, font=font)
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
-        pad = max(14, preview.width // 48)
+        pad = max(12, preview.width // 70)
         x = max(pad, preview.width - text_w - pad * 2)
         y = max(pad, preview.height - text_h - pad * 2)
         draw.rounded_rectangle(
