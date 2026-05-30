@@ -16,6 +16,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -880,6 +884,14 @@ button.danger {
   color: #dceff3;
 }
 
+.button.disabled,
+button:disabled {
+  border-color: rgba(158, 178, 181, 0.32);
+  background: rgba(7, 14, 21, 0.54);
+  color: rgba(220, 239, 243, 0.58);
+  cursor: not-allowed;
+}
+
 button.danger {
   border-color: rgba(255, 111, 97, 0.7);
   color: #ffd8d3;
@@ -1433,6 +1445,75 @@ dd {
   display: none;
 }
 
+.unlock-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 18px;
+  align-items: center;
+  margin: 20px 0 14px;
+  padding: 18px;
+  border: 1px solid rgba(103, 199, 239, 0.3);
+  border-left: 6px solid var(--cyan);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(5, 16, 24, 0.72), rgba(12, 21, 28, 0.54)),
+    rgba(4, 10, 16, 0.54);
+}
+
+.unlock-gate.open {
+  border-left-color: var(--green);
+}
+
+.unlock-copy-block {
+  min-width: 0;
+}
+
+.unlock-copy-block h3 {
+  margin: 6px 0 8px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.unlock-copy {
+  margin: 0;
+}
+
+.countdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.countdown-grid span {
+  display: grid;
+  min-height: 82px;
+  place-items: center;
+  padding: 10px 6px;
+  border: 1px solid rgba(103, 199, 239, 0.24);
+  border-radius: 6px;
+  background: rgba(2, 6, 10, 0.5);
+}
+
+.countdown-grid b {
+  color: #f7fbff;
+  font-family: "Times New Roman", serif;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.countdown-grid em {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.download-actions,
+.locked-actions {
+  margin-top: 12px;
+}
+
 .queue {
   display: grid;
   gap: 12px;
@@ -1523,6 +1604,7 @@ dd {
   .help-console,
   .workspace.two,
   .confirm-grid,
+  .unlock-gate,
   .meta {
     grid-template-columns: 1fr;
   }
@@ -1600,6 +1682,18 @@ dd {
 
   .digit-rack {
     gap: 5px;
+  }
+
+  .countdown-grid {
+    gap: 6px;
+  }
+
+  .countdown-grid span {
+    min-height: 74px;
+  }
+
+  .countdown-grid b {
+    font-size: 26px;
   }
 }
 

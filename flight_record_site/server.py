@@ -4,6 +4,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import parse_qs, quote, urlparse
 import cgi
 import hashlib
@@ -21,6 +22,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from zoneinfo import ZoneInfo
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +32,7 @@ APP_ROOT = Path(__file__).resolve().parent
 DATA_DIR = APP_ROOT / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 GENERATED_DIR = DATA_DIR / "generated"
+PREVIEW_DIR = DATA_DIR / "previews"
 DB_PATH = DATA_DIR / "flight_record.sqlite3"
 ADMIN_SECRET_PATH = DATA_DIR / "admin_secret.txt"
 ADMIN_PASSWORD_PATH = DATA_DIR / "admin_password.txt"
@@ -38,6 +43,11 @@ _ADMIN_SECRET_CACHE: str | None = None
 _ADMIN_PASSWORD_CACHE: str | None = None
 _ADDRESS_SUGGEST_CACHE: dict[str, list[dict[str, object]]] = {}
 _ADDRESS_GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
+DOWNLOAD_UNLOCK_TZ = ZoneInfo("Asia/Shanghai")
+DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 12, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
+DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
+DOWNLOAD_UNLOCK_LABEL = "2026-06-13 12:00 UTC+08:00"
+LOCKED_PREVIEW_MAX_DIMENSION = 1400
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import render_xia_yizhou_pilot_flight_record_v2 as flight_renderer  # noqa: E402
@@ -89,10 +99,19 @@ def now_text() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def shanghai_now() -> datetime:
+    return datetime.now(DOWNLOAD_UNLOCK_TZ)
+
+
+def downloads_unlocked(now: datetime | None = None) -> bool:
+    return (now or shanghai_now()) >= DOWNLOAD_UNLOCK_AT
+
+
 def ensure_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
         db.execute(
             """
@@ -645,6 +664,47 @@ def regenerate_record_files(row: sqlite3.Row, force: bool = False) -> bool:
     return png_path.exists() and pdf_path.exists()
 
 
+def locked_preview_path(original_path: Path) -> Path | None:
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    preview_path = PREVIEW_DIR / f"{original_path.stem}-locked-preview.png"
+    if preview_path.exists() and preview_path.stat().st_mtime >= original_path.stat().st_mtime:
+        return preview_path
+    try:
+        with Image.open(original_path) as source:
+            preview = source.convert("RGBA")
+        preview.thumbnail(
+            (LOCKED_PREVIEW_MAX_DIMENSION, LOCKED_PREVIEW_MAX_DIMENSION),
+            Image.Resampling.LANCZOS,
+        )
+        overlay = Image.new("RGBA", preview.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        label = "PREVIEW ONLY"
+        font_size = max(28, min(preview.size) // 16)
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+        except OSError:
+            font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        pad = max(14, preview.width // 48)
+        x = max(pad, preview.width - text_w - pad * 2)
+        y = max(pad, preview.height - text_h - pad * 2)
+        draw.rounded_rectangle(
+            (x - pad, y - pad, x + text_w + pad, y + text_h + pad),
+            radius=max(8, pad // 2),
+            fill=(2, 8, 14, 156),
+            outline=(103, 199, 239, 118),
+            width=2,
+        )
+        draw.text((x, y), label, font=font, fill=(255, 255, 255, 218))
+        Image.alpha_composite(preview, overlay).convert("RGB").save(preview_path, "PNG", optimize=True)
+        return preview_path
+    except Exception as exc:
+        print(f"Failed to create locked preview for {original_path}: {exc}", file=sys.stderr)
+        return None
+
+
 def record_download(row: sqlite3.Row, file_type: str, actor_role: str, client_ip: str, user_agent: str) -> None:
     if file_type not in {"pdf", "png"}:
         return
@@ -702,6 +762,124 @@ def download_record_html(submission_id: str) -> str:
         f'最近 {esc(summary["last_downloaded_at"])}</p>'
         f'<p class="download-record compact">{detail}</p>'
     )
+
+
+def download_countdown_script() -> str:
+    return """
+<script>
+(() => {
+  const gate = document.querySelector("[data-download-unlock]");
+  if (!gate) return;
+  const target = Date.parse(gate.dataset.unlockAt || "");
+  if (!Number.isFinite(target)) return;
+
+  const units = {
+    days: gate.querySelector('[data-countdown-unit="days"]'),
+    hours: gate.querySelector('[data-countdown-unit="hours"]'),
+    minutes: gate.querySelector('[data-countdown-unit="minutes"]'),
+    seconds: gate.querySelector('[data-countdown-unit="seconds"]')
+  };
+  const actions = document.querySelector("[data-unlock-actions]");
+  const locked = document.querySelector("[data-locked-actions]");
+  const copy = gate.querySelector("[data-unlock-copy]");
+  const pad = (value) => String(value).padStart(2, "0");
+
+  function setOpen() {
+    gate.classList.remove("locked");
+    gate.classList.add("open");
+    Object.values(units).forEach((unit) => {
+      if (unit) unit.textContent = "00";
+    });
+    if (actions) actions.hidden = false;
+    if (locked) locked.hidden = true;
+    if (copy) copy.textContent = "下载窗口已开放，可以保存原图或 PDF。";
+  }
+
+  function render() {
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      setOpen();
+      return false;
+    }
+    const totalSeconds = Math.floor(diff / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (units.days) units.days.textContent = pad(days);
+    if (units.hours) units.hours.textContent = pad(hours);
+    if (units.minutes) units.minutes.textContent = pad(minutes);
+    if (units.seconds) units.seconds.textContent = pad(seconds);
+    return true;
+  }
+
+  let timer = null;
+  if (render()) {
+    timer = setInterval(() => {
+      if (!render() && timer) clearInterval(timer);
+    }, 1000);
+  }
+})();
+</script>
+"""
+
+
+def download_countdown_html(row: sqlite3.Row, png_name: str, pdf_name: str) -> str:
+    unlocked = downloads_unlocked()
+    gate_state = "open" if unlocked else "locked"
+    locked_hidden = " hidden" if unlocked else ""
+    actions_hidden = "" if unlocked else " hidden"
+    copy = (
+        "下载窗口已开放，可以保存原图或 PDF。"
+        if unlocked
+        else f"原图将于 {DOWNLOAD_UNLOCK_LABEL} 开放。在此之前只开放页面预览。"
+    )
+    png_link = (
+        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=png&source=player" '
+        f'download="{png_name}">下载原图 PNG</a>'
+        if png_name
+        else ""
+    )
+    return f"""
+  <div class="unlock-gate {gate_state}" data-download-unlock data-unlock-at="{DOWNLOAD_UNLOCK_ISO}">
+    <div class="unlock-copy-block">
+      <p class="eyebrow">DOWNLOAD WINDOW</p>
+      <h3>{"图片下载已开放" if unlocked else "原图下载倒计时"}</h3>
+      <p class="muted unlock-copy" data-unlock-copy>{esc(copy)}</p>
+    </div>
+    <div class="countdown-grid" aria-label="距离原图下载开放">
+      <span><b data-countdown-unit="days">00</b><em>天</em></span>
+      <span><b data-countdown-unit="hours">00</b><em>时</em></span>
+      <span><b data-countdown-unit="minutes">00</b><em>分</em></span>
+      <span><b data-countdown-unit="seconds">00</b><em>秒</em></span>
+    </div>
+  </div>
+  <div class="actions locked-actions" data-locked-actions{locked_hidden}>
+    <button class="button disabled" type="button" disabled>原图下载未开放</button>
+  </div>
+  <div class="actions download-actions" data-unlock-actions{actions_hidden}>
+    {png_link}
+    <a class="button ghost download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
+  </div>
+{download_countdown_script()}
+"""
+
+
+def download_locked_page(submission_id: str) -> bytes:
+    back_href = f"/status?id={esc(submission_id)}" if submission_id else "/"
+    body = f"""
+<section class="panel wide">
+  <div class="section-head">
+    <span>LOCK</span>
+    <h2>原图下载尚未开放</h2>
+  </div>
+  <p class="muted">原图下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回状态页预览，不会开放原文件下载。</p>
+  <div class="actions status-actions">
+    <a class="button ghost" href="{back_href}">返回预览页</a>
+  </div>
+</section>
+"""
+    return layout("下载尚未开放", body)
 
 
 def layout(title: str, body: str, admin: bool = False, body_class: str = "") -> bytes:
@@ -1196,6 +1374,7 @@ def status_page(submission_id: str) -> bytes:
 """
     if row["pdf_filename"]:
         pdf_name = esc(Path(row["pdf_filename"]).name)
+        png_name = esc(Path(row["png_filename"]).name) if row["png_filename"] else ""
         preview_token = quote(str(row["generated_at"] or row["id"]))
         downloads = f"""
 <div class="panel wide success-panel">
@@ -1210,9 +1389,7 @@ def status_page(submission_id: str) -> bytes:
     <p class="preview-fallback" hidden>预览加载失败，请直接下载 PDF。</p>
     <figcaption>飞行纪录预览</figcaption>
   </figure>
-  <div class="actions">
-    <a class="button download-button" href="/download?id={esc(row['id'])}&type=pdf&source=player" download="{pdf_name}">下载 PDF</a>
-  </div>
+  {download_countdown_html(row, png_name, pdf_name)}
 </div>
 """
 
@@ -1462,6 +1639,12 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not regenerate_record_files(row, force=True):
                 self.send_error(404)
                 return
+            if not self.is_admin() and not downloads_unlocked():
+                locked_path = locked_preview_path(path)
+                if locked_path is None:
+                    self.send_error(404)
+                    return
+                path = locked_path
             self.serve_path(path)
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
@@ -1470,6 +1653,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             kind = qs.get("type", ["pdf"])[0]
             if row is None:
                 self.send_error(404)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
@@ -1492,6 +1678,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             kind = qs.get("type", ["pdf"])[0]
             if row is None:
                 self.send_error(404)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_html(download_locked_page(row["id"]), HTTPStatus.FORBIDDEN)
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
@@ -1539,6 +1728,12 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not path.exists() and not regenerate_record_files(row):
                 self.send_error(404)
                 return
+            if not self.is_admin() and not downloads_unlocked():
+                locked_path = locked_preview_path(path)
+                if locked_path is None:
+                    self.send_error(404)
+                    return
+                path = locked_path
             self.serve_path_head(path)
         elif parsed.path == "/view":
             if not self.require_player_or_admin():
@@ -1547,6 +1742,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             kind = qs.get("type", ["pdf"])[0]
             if row is None:
                 self.send_error(404)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_error(403)
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
@@ -1569,6 +1767,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             kind = qs.get("type", ["pdf"])[0]
             if row is None:
                 self.send_error(404)
+                return
+            if not self.is_admin() and not downloads_unlocked():
+                self.send_error(403)
                 return
             if kind == "png" and row["png_filename"]:
                 path = GENERATED_DIR / row["png_filename"]
