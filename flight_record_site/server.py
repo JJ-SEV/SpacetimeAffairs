@@ -46,7 +46,7 @@ _ADDRESS_GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 DOWNLOAD_UNLOCK_TZ = ZoneInfo("Asia/Shanghai")
 DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 0, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
 DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
-DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 UTC+08:00"
+DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 中国北京时间"
 LOCKED_PREVIEW_MAX_DIMENSION = 1400
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -818,31 +818,24 @@ def query_countdown_script() -> str:
 """
 
 
-def download_countdown_html(row: sqlite3.Row, png_name: str, pdf_name: str) -> str:
+def download_countdown_html(row: sqlite3.Row, pdf_name: str) -> str:
     if not downloads_unlocked():
         return f"""
   <div class="actions locked-actions">
-    <button class="button disabled" type="button" disabled>下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
+    <button class="button disabled" type="button" disabled>PDF 下载将在 {DOWNLOAD_UNLOCK_LABEL} 开放</button>
   </div>
 """
-    png_link = (
-        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=png&source=player" '
-        f'download="{png_name}">下载原图 PNG</a>'
-        if png_name
-        else ""
-    )
     pdf_link = (
-        f'<a class="button ghost download-button" href="/download?id={esc(row["id"])}&type=pdf&source=player" '
+        f'<a class="button download-button" href="/download?id={esc(row["id"])}&type=pdf&source=player" '
         f'download="{pdf_name}">下载 PDF</a>'
         if pdf_name
         else ""
     )
     return f"""
   <div class="download-ready">
-    <p class="muted">下载窗口已开放，可以保存原图或 PDF。</p>
+    <p class="muted">下载窗口已开放，可以保存 PDF。</p>
   </div>
   <div class="actions download-actions">
-    {png_link}
     {pdf_link}
   </div>
 """
@@ -854,9 +847,9 @@ def download_locked_page(submission_id: str) -> bytes:
 <section class="panel wide">
   <div class="section-head">
     <span>LOCK</span>
-    <h2>原图下载尚未开放</h2>
+    <h2>下载尚未开放</h2>
   </div>
-  <p class="muted">查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回查询页查看倒计时。</p>
+  <p class="muted">查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。现在可以返回查询页查看倒计时。</p>
   <div class="actions status-actions">
     <a class="button ghost" href="{back_href}">返回查询页</a>
   </div>
@@ -1102,7 +1095,7 @@ def record_preview_page(submission_id: str) -> bytes:
 
 def gallery_page(submission_id: str) -> bytes:
     if not downloads_unlocked():
-        return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
+        return history_page(f"查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
         return history_page("没找到这个编号。")
@@ -1136,7 +1129,6 @@ def gallery_page(submission_id: str) -> bytes:
     if not row["png_filename"]:
         return status_page(row["id"])
     pdf_name = esc(Path(row["pdf_filename"]).name) if row["pdf_filename"] else ""
-    png_name = esc(Path(row["png_filename"]).name)
     preview_token = quote(str(row["generated_at"] or row["id"]))
     body = f"""
 <section class="panel wide success-panel">
@@ -1156,7 +1148,7 @@ def gallery_page(submission_id: str) -> bytes:
         <img class="record-preview" src="/preview?id={esc(row['id'])}&v={preview_token}" alt="飞行纪录图预览" loading="eager">
         <figcaption>飞行纪录图</figcaption>
       </figure>
-      {download_countdown_html(row, png_name, pdf_name)}
+      {download_countdown_html(row, pdf_name)}
     </article>
   </div>
   <p class="muted gallery-note">追加图片开放后，会显示在同一个图库里。</p>
@@ -1226,9 +1218,9 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
     query_button_disabled = "" if query_unlocked else " disabled"
     query_button_text = "查看状态" if query_unlocked else "等待开放"
     query_copy = (
-        "查询已开放，可以查看审核状态并进入下载。"
+        "查询已开放，可以查看审核状态并进入 PDF 下载。"
         if query_unlocked
-        else "6月13日 00:00 后开放查询，届时可查看审核状态并进入下载。"
+        else "6月13日 00:00 中国北京时间后开放查询，届时可查看审核状态并进入 PDF 下载。"
     )
     countdown_hidden = " hidden" if query_unlocked else ""
     current_code = f"""
@@ -1250,7 +1242,7 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
   <div class="signal-grid">
     <div><b>VERIFY</b><span>MANUAL</span></div>
     <div><b>QUERY</b><span>CODE</span></div>
-    <div><b>GALLERY</b><span>PNG</span></div>
+    <div><b>GALLERY</b><span>PDF</span></div>
   </div>
 </section>
 <section class="workspace two">
@@ -1568,7 +1560,7 @@ def status_badge(status: str) -> str:
 
 def status_page(submission_id: str) -> bytes:
     if not downloads_unlocked():
-        return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
+        return history_page(f"查看状态和 PDF 下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
         return public_page("没找到这个编号。")
@@ -1694,7 +1686,6 @@ def status_page(submission_id: str) -> bytes:
 """
     if row["pdf_filename"]:
         pdf_name = esc(Path(row["pdf_filename"]).name)
-        png_name = esc(Path(row["png_filename"]).name) if row["png_filename"] else ""
         preview_token = quote(str(row["generated_at"] or row["id"]))
         downloads = f"""
 <div class="panel wide success-panel">
@@ -1709,7 +1700,7 @@ def status_page(submission_id: str) -> bytes:
     <p class="preview-fallback" hidden>预览加载失败，请直接下载 PDF。</p>
     <figcaption>飞行纪录预览</figcaption>
   </figure>
-  {download_countdown_html(row, png_name, pdf_name)}
+  {download_countdown_html(row, pdf_name)}
 </div>
 """
 
@@ -1995,6 +1986,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
+                if kind == "png":
+                    self.send_error(404)
+                    return
                 if row["status"] != "approved":
                     self.send_error(403)
                     return
@@ -2024,6 +2018,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
+                if kind == "png":
+                    self.send_error(404)
+                    return
                 if row["status"] != "approved":
                     self.send_error(403)
                     return
@@ -2092,6 +2089,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
+                if kind == "png":
+                    self.send_error(404)
+                    return
                 if row["status"] != "approved" or not downloads_unlocked():
                     self.send_error(403)
                     return
@@ -2118,6 +2118,9 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             if not self.is_admin():
+                if kind == "png":
+                    self.send_error(404)
+                    return
                 if row["status"] != "approved" or not downloads_unlocked():
                     self.send_error(403)
                     return
