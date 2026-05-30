@@ -993,6 +993,10 @@ button.danger {
   color: #d5e4e5;
 }
 
+.confirm-panel .screen-warning {
+  margin-top: 18px;
+}
+
 .confirm-copy {
   display: grid;
   align-content: space-between;
@@ -1006,6 +1010,11 @@ button.danger {
 
 .confirm-button {
   width: 100%;
+}
+
+.flight-confirm-actions {
+  max-width: 280px;
+  margin-top: 16px;
 }
 
 .commit-row {

@@ -977,8 +977,8 @@ def destination_page(message: str = "") -> bytes:
   <aside class="quick-gallery">
     <p class="eyebrow">ARCHIVE ACCESS</p>
     <form class="inline-query" action="/gallery" method="get">
-      <input name="id" maxlength="12" placeholder="输入查询码" required>
-      <button type="submit">查询码登录</button>
+      <input name="id" maxlength="12" placeholder="输入编号" required>
+      <button type="submit">编号登录</button>
     </form>
   </aside>
 </section>
@@ -1008,6 +1008,34 @@ def destination_page(message: str = "") -> bytes:
     return layout("规划飞行航道", body, body_class="home-body")
 
 
+def flight_confirm_page(submission_id: str) -> bytes:
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None or not row["png_filename"]:
+        return destination_page("没找到这个飞行纪录。")
+    body = f"""
+<section class="panel wide confirm-panel">
+  <div class="section-head">
+    <span>02</span>
+    <h2>飞行纪录预览</h2>
+  </div>
+  <dl class="meta">
+    <div><dt>编号</dt><dd>{esc(row['id'])}</dd></div>
+    <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
+    <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
+  </dl>
+  <div class="screen-warning">
+    <b>截图保存编号</b>
+    <span>请现在截图保存编号。后续自证、查看进度和进入图库都需要用到这个编号。</span>
+  </div>
+  <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post">
+    <input type="hidden" name="id" value="{esc(row['id'])}">
+    <button class="confirm-button" type="submit">确认</button>
+  </form>
+</section>
+"""
+    return layout("飞行纪录预览", body, body_class="home-body")
+
+
 def flight_loading_page(submission_id: str) -> bytes:
     redirect_to = f"/record?id={esc(submission_id)}"
     body = f"""
@@ -1027,10 +1055,14 @@ def flight_loading_page(submission_id: str) -> bytes:
     <h1>生成飞行纪录</h1>
     <div class="loading-bar" aria-hidden="true"><span></span></div>
     <p class="loading-copy">正在同步目标与目的地坐标</p>
-    <a class="button ghost loading-fallback" href="{redirect_to}">查看预览</a>
+    <a class="button ghost loading-fallback" href="{redirect_to}" data-loading-fallback hidden>查看预览</a>
   </section>
 </main>
 <script>
+  const fallback = document.querySelector("[data-loading-fallback]");
+  setTimeout(() => {{
+    if (fallback) fallback.hidden = false;
+  }}, 2200);
   setTimeout(() => {{
     window.location.replace("{redirect_to}");
   }}, 1500);
@@ -1051,7 +1083,7 @@ def record_preview_page(submission_id: str) -> bytes:
     <h2>飞行纪录预览</h2>
   </div>
   <dl class="meta">
-    <div><dt>查询码</dt><dd>{esc(row['id'])}</dd></div>
+    <div><dt>编号</dt><dd>{esc(row['id'])}</dd></div>
     <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
     <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
   </dl>
@@ -1062,7 +1094,6 @@ def record_preview_page(submission_id: str) -> bytes:
   </figure>
   <div class="preview-actions">
     <a class="button" href="/history?id={esc(row['id'])}">下载历史飞行纪录</a>
-    <a class="button ghost" href="/">重新规划</a>
   </div>
 </section>
 """
@@ -1074,13 +1105,13 @@ def gallery_page(submission_id: str) -> bytes:
         return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
-        return history_page("没找到这个查询码。")
+        return history_page("没找到这个编号。")
     if row["status"] != "approved":
         status_text = {
-            "draft": "这个查询码还没有提交自证。",
+            "draft": "这个编号还没有提交自证。",
             "pending": "自证正在审核中。",
             "rejected": "自证审核未通过。",
-        }.get(row["status"], "这个查询码暂时不能进入图库。")
+        }.get(row["status"], "这个编号暂时不能进入图库。")
         note = f"<p class='muted'>{esc(row['review_note'])}</p>" if row["review_note"] else ""
         action = (
             f'<a class="button" href="/history?id={esc(row["id"])}">提交自证</a>'
@@ -1115,7 +1146,7 @@ def gallery_page(submission_id: str) -> bytes:
     {status_badge(row['status'])}
   </div>
   <dl class="meta">
-    <div><dt>查询码</dt><dd>{esc(row['id'])}</dd></div>
+    <div><dt>编号</dt><dd>{esc(row['id'])}</dd></div>
     <div><dt>任务目标</dt><dd>{esc(row['destination_name'])}</dd></div>
     <div><dt>目的地坐标</dt><dd>{esc(row['destination_coordinate'])}</dd></div>
   </dl>
@@ -1202,7 +1233,7 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
     countdown_hidden = " hidden" if query_unlocked else ""
     current_code = f"""
     <div class="screen-warning compact-warning">
-      <b>当前查询码</b>
+      <b>当前编号</b>
       <span>{esc(clean_id)}</span>
     </div>
 """ if clean_id else ""
@@ -1247,8 +1278,8 @@ def history_page(message: str = "", submission_id: str = "") -> bytes:
       <span>02</span>
       <h2>查看进度</h2>
     </div>
-    <label>提交编号
-      <input name="id" value="{esc(clean_id)}" placeholder="请输入提交编号" required>
+    <label>编号
+      <input name="id" value="{esc(clean_id)}" placeholder="请输入编号" required>
     </label>
     <div class="query-unlock" aria-live="polite">
       <p class="muted" data-query-copy>{esc(query_copy)}</p>
@@ -1496,18 +1527,18 @@ def admin_loading_page() -> bytes:
 def submitted_page(submission_id: str) -> bytes:
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
-        return public_page("没找到这个提交编号。")
+        return public_page("没找到这个编号。")
 
     body = f"""
 <section class="panel wide confirm-panel">
   <div class="section-head">
     <span>ID</span>
-    <h2>提交编号已生成</h2>
+    <h2>编号已生成</h2>
     {status_badge(row['status'])}
   </div>
   <div class="confirm-grid">
     <div>
-      <p class="muted">请现在截图保存提交编号。截完图后，再点确认进入审核进度页。</p>
+      <p class="muted">请现在截图保存编号。截完图后，再点确认进入审核进度页。</p>
       <div class="id-chip">{esc(row['id'])}</div>
       <div class="screen-warning">
         <b>截图确认</b>
@@ -1528,7 +1559,7 @@ def submitted_page(submission_id: str) -> bytes:
   </div>
 </section>
 """
-    return layout("提交编号", body)
+    return layout("编号", body)
 
 
 def status_badge(status: str) -> str:
@@ -1540,7 +1571,7 @@ def status_page(submission_id: str) -> bytes:
         return history_page(f"查看状态和下载入口将在 {DOWNLOAD_UNLOCK_LABEL} 开放。", submission_id)
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None:
-        return public_page("没找到这个提交编号。")
+        return public_page("没找到这个编号。")
 
     downloads = ""
     customize = ""
@@ -1874,6 +1905,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not self.require_player():
                 return
             self.send_html(flight_loading_page(normalize_submission_id(qs.get("id", [""])[0])))
+        elif parsed.path == "/flight/confirm":
+            if not self.require_player():
+                return
+            self.send_html(flight_confirm_page(normalize_submission_id(qs.get("id", [""])[0])))
         elif parsed.path == "/record":
             if not self.require_player():
                 return
@@ -2154,6 +2189,16 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 """,
                 (submission_id, now_text(), destination_name, address_hash, coord, png_name, pdf_name, now_text()),
             )
+            self.redirect(f"/flight/confirm?id={submission_id}")
+        elif parsed.path == "/flight/confirm":
+            if not self.require_player():
+                return
+            form = self.parse_urlencoded()
+            submission_id = normalize_submission_id(form.get("id", ""))
+            row = db_row("SELECT id FROM submissions WHERE id = ?", (submission_id,))
+            if row is None:
+                self.send_html(destination_page("没找到这个飞行纪录。"), 404)
+                return
             self.redirect(f"/flight/loading?id={submission_id}")
         elif parsed.path == "/submit":
             if not self.require_player():
@@ -2185,7 +2230,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 (contact_key, contact_key, submission_id or ""),
             )
             if duplicate is not None:
-                self.send_html(public_page("这个小红书号或邮箱已经提交过自证。请使用第一次保存的提交编号查询审核进度。"), 400)
+                self.send_html(public_page("这个小红书号或邮箱已经提交过自证。请使用第一次保存的编号查询审核进度。"), 400)
                 return
             if existing_row is not None:
                 bond_original, bond_stored = save_uploaded_file(proof_bond, submission_id, "bond")
