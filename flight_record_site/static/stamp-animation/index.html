@@ -1,0 +1,2311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flight Record Scanner Seal Preview</title>
+  <style>
+    :root {
+      --bg: #061018;
+      --cyan: #65d5ff;
+      --mint: #82ffd2;
+      --amber: #ff9f45;
+      --danger: #ff3f3f;
+      --paper: #efe9dc;
+      --ink: #ecf8f3;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(101, 213, 255, .055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101, 213, 255, .055) 1px, transparent 1px),
+        radial-gradient(circle at 72% 18%, rgba(255, 144, 66, .18), transparent 32%),
+        radial-gradient(circle at 18% 58%, rgba(101, 213, 255, .18), transparent 34%),
+        linear-gradient(145deg, rgba(2,8,13,.1), rgba(4,15,22,.72)),
+        #061018;
+      background-size: 54px 54px, 54px 54px, 100% 100%, 100% 100%, 100% 100%;
+      font-family: Inter, "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 18%, transparent 82%, rgba(0,0,0,.42));
+      pointer-events: none;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(284px, 320px);
+      gap: 18px;
+      width: min(1500px, calc(100vw - 24px));
+      height: calc(100svh - 24px);
+      margin: 12px auto;
+      padding: 14px;
+      transform-origin: center;
+      transition: opacity .52s ease, filter .52s ease, transform .52s ease;
+      will-change: opacity, filter, transform;
+    }
+
+    body[data-phase="warning"] .stage {
+      opacity: .12;
+      filter: grayscale(.22) blur(1px) brightness(.68) contrast(1.32) saturate(.78);
+      transform: scale(1.018);
+      pointer-events: none;
+      animation: underlaySignalFlicker 1.46s steps(1, end) infinite;
+    }
+
+    body[data-phase="blackout"] .stage,
+    body[data-phase="granted"] .stage {
+      opacity: 0;
+      filter: blur(12px) brightness(.72) saturate(1.35);
+      transform: scale(1.035);
+      pointer-events: none;
+    }
+
+    .record-bay {
+      position: relative;
+      min-width: 0;
+      border: 1px solid rgba(101, 213, 255, .32);
+      background:
+        radial-gradient(circle at 50% 48%, rgba(130,255,210,.13), transparent 30%),
+        radial-gradient(circle at 18% 18%, rgba(101,213,255,.18), transparent 24%),
+        radial-gradient(circle at 84% 72%, rgba(255,159,69,.13), transparent 25%),
+        linear-gradient(135deg, rgba(7,25,35,.9), rgba(6,16,24,.7)),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 8px);
+      box-shadow: 0 0 0 1px rgba(130,255,210,.08), 0 24px 80px rgba(0,0,0,.42);
+      overflow: hidden;
+    }
+
+    body[data-armed="true"] .record-bay {
+      animation: bayPower 6.2s cubic-bezier(.18,.72,.18,1) forwards;
+    }
+
+    .record-bay::before {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border: 1px solid rgba(101,213,255,.22);
+      background:
+        linear-gradient(90deg, transparent, rgba(130,255,210,.08), transparent),
+        radial-gradient(ellipse at 50% 52%, transparent 0 54%, rgba(101,213,255,.2) 55%, transparent 56%),
+        radial-gradient(ellipse at 50% 52%, transparent 0 70%, rgba(255,159,69,.16) 71%, transparent 72%),
+        linear-gradient(rgba(101,213,255,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101,213,255,.045) 1px, transparent 1px);
+      background-size: auto, auto, auto, 32px 32px, 32px 32px;
+      pointer-events: none;
+    }
+
+    .record-bay::after {
+      content: "";
+      position: absolute;
+      inset: 34px 26px;
+      border-left: 8px solid rgba(101,213,255,.15);
+      border-right: 8px solid rgba(101,213,255,.15);
+      box-shadow:
+        inset 18px 0 26px rgba(101,213,255,.08),
+        inset -18px 0 26px rgba(255,159,69,.07);
+      pointer-events: none;
+    }
+
+    .record-shell {
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      width: min(96%, calc((100svh - 96px) * 1.62), 1220px);
+      aspect-ratio: 2686 / 1656;
+      transform: translate3d(-50%, -50%, 0) scale(.98);
+      animation: recordEnter 6.2s cubic-bezier(.2,.75,.18,1) forwards;
+      box-shadow: 0 24px 56px rgba(0,0,0,.42);
+      will-change: transform, opacity;
+    }
+
+    .record {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border: 1px solid rgba(238,233,220,.36);
+      background: var(--paper);
+    }
+
+    .record-glass {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(101,213,255,.08), transparent 22%, transparent 72%, rgba(255,159,69,.07));
+      opacity: .64;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .record-glass::after {
+      content: "";
+      position: absolute;
+      inset: -28% -16%;
+      background: linear-gradient(105deg, transparent 34%, rgba(255,255,255,.28) 47%, rgba(130,255,210,.22) 50%, transparent 62%);
+      opacity: 0;
+      transform: translateX(-78%) skewX(-10deg);
+    }
+
+    body[data-armed="true"] .record-glass::after {
+      animation: glassSweep 6.2s cubic-bezier(.2,.74,.2,1) forwards;
+    }
+
+    .stamp-mark {
+      position: absolute;
+      right: 5.5%;
+      bottom: 5.8%;
+      width: 21.5%;
+      aspect-ratio: 1;
+      opacity: 0;
+      transform: scale(1.08);
+      animation: embossReveal 6.2s cubic-bezier(.16,.84,.24,1) forwards;
+      will-change: transform, opacity;
+    }
+
+    .impact-ring {
+      position: absolute;
+      z-index: 7;
+      right: 8.3%;
+      bottom: 8.7%;
+      width: 18.8%;
+      aspect-ratio: 1;
+      border: 2px solid rgba(130,255,210,.78);
+      border-radius: 50%;
+      opacity: 0;
+      box-shadow: 0 0 34px rgba(130,255,210,.56);
+      animation: impactRing 6.2s ease-out forwards;
+    }
+
+    .scanner-carriage {
+      position: absolute;
+      z-index: 10;
+      left: 50%;
+      top: -10%;
+      width: 110%;
+      opacity: 0;
+      transform: translate3d(-50%, -120%, 0);
+      animation: scannerTravel 6.2s cubic-bezier(.23,.75,.14,1) forwards;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .scanner-device {
+      display: block;
+      width: 100%;
+      height: auto;
+      filter: drop-shadow(0 20px 22px rgba(0,0,0,.48));
+    }
+
+    .scan-light {
+      position: absolute;
+      left: 4%;
+      right: 4%;
+      top: 70%;
+      height: 38%;
+      opacity: 0;
+      background:
+        linear-gradient(180deg, rgba(101,213,255,.36), rgba(130,255,210,.12), transparent),
+        linear-gradient(90deg, transparent, rgba(255,255,255,.24), transparent);
+      clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+      animation: scanGlow 6.2s ease forwards;
+    }
+
+    .pressure-pad {
+      position: absolute;
+      right: 5.6%;
+      top: 58%;
+      width: 21.3%;
+      aspect-ratio: 1;
+      border: 1px solid rgba(130,255,210,.42);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, rgba(236,248,243,.22), rgba(101,213,255,.12) 34%, rgba(4,13,19,.72) 67%),
+        repeating-radial-gradient(circle, transparent 0 16px, rgba(130,255,210,.15) 17px 18px);
+      opacity: 0;
+      animation: padPulse 6.2s ease forwards;
+    }
+
+    .pressure-pad::after {
+      content: "";
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      border: 1px solid rgba(255,159,69,.6);
+      background: radial-gradient(circle, rgba(255,159,69,.34), transparent 62%);
+    }
+
+    .status-panel {
+      position: relative;
+      border-left: 1px solid rgba(101,213,255,.36);
+      padding: 12px 0 12px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-family: Georgia, serif;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 22px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(40px, 5vw, 70px);
+      line-height: .92;
+      letter-spacing: 0;
+    }
+
+    .readout {
+      display: grid;
+      gap: 12px;
+      margin: 18px 0 28px;
+    }
+
+    .readout div {
+      position: relative;
+      padding: 14px 14px 14px 18px;
+      border: 1px solid rgba(101,213,255,.22);
+      background: rgba(4,13,19,.62);
+      overflow: hidden;
+    }
+
+    .readout div::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--amber);
+      transform: scaleY(0);
+      transform-origin: top;
+      animation: statusBar 6.2s ease forwards;
+      animation-delay: var(--delay);
+    }
+
+    .readout b {
+      display: block;
+      color: var(--mint);
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+
+    .readout span {
+      display: block;
+      margin-top: 6px;
+      color: rgba(236,248,243,.82);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .progress {
+      position: relative;
+      height: 6px;
+      border: 1px solid rgba(101,213,255,.35);
+      background: rgba(4,13,19,.7);
+      overflow: hidden;
+      animation: progressFrameFail 6.5s ease forwards;
+    }
+
+    .progress span {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 100%;
+      transform: scaleX(0);
+      transform-origin: left;
+      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
+      box-shadow: 0 0 24px rgba(130,255,210,.6);
+      animation: progressFail 6.5s ease forwards;
+    }
+
+    .complete {
+      margin: 22px 0 0;
+      color: var(--danger);
+      font-weight: 800;
+      opacity: 0;
+      text-shadow: 0 0 18px rgba(255,63,63,.38);
+      animation: failNotice 6.5s ease forwards;
+    }
+
+    .audio-gate {
+      position: fixed;
+      z-index: 150;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(101,213,255,.18), transparent 34%),
+        radial-gradient(circle at 70% 72%, rgba(255,159,69,.13), transparent 30%),
+        rgba(2,8,12,.88);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .28s ease, visibility .28s ease;
+    }
+
+    body[data-phase="audio-choice"] .audio-gate {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .audio-gate-card {
+      width: min(620px, calc(100vw - 44px));
+      border: 1px solid rgba(101,213,255,.42);
+      background:
+        linear-gradient(135deg, rgba(7,25,35,.94), rgba(4,13,19,.88)),
+        linear-gradient(rgba(101,213,255,.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101,213,255,.055) 1px, transparent 1px);
+      background-size: auto, 28px 28px, 28px 28px;
+      box-shadow: 0 26px 72px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
+      padding: clamp(22px, 5vw, 38px);
+    }
+
+    .audio-gate-card h2 {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(34px, 7vw, 58px);
+      line-height: .96;
+      letter-spacing: 0;
+    }
+
+    .audio-gate-card p {
+      margin: 0;
+      color: rgba(236,248,243,.72);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .audio-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .audio-actions button {
+      border: 1px solid rgba(101,213,255,.42);
+      background: rgba(4,13,19,.72);
+      color: var(--ink);
+      padding: 12px 18px;
+      font: 800 15px/1 Inter, "Noto Sans SC", sans-serif;
+      cursor: pointer;
+    }
+
+    .audio-actions button:first-child {
+      border-color: rgba(255,159,69,.72);
+      background: linear-gradient(180deg, rgba(255,159,69,.92), rgba(191,72,32,.92));
+    }
+
+    .audio-actions button:hover {
+      filter: brightness(1.08);
+    }
+
+    body[data-phase="warning"] .failure-overlay::before {
+      opacity: .5;
+      animation: broadcastBreath 1.36s steps(1, end) infinite;
+    }
+
+    body[data-phase="warning"] .failure-warning {
+      opacity: 1;
+    }
+
+    body[data-phase="blackout"] .blackout {
+      opacity: 1;
+    }
+
+    body[data-phase="granted"] .access-granted {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .failure-overlay {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+    }
+
+    .failure-overlay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,159,69,.14), transparent 34%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 6px),
+        linear-gradient(90deg, rgba(0,0,0,.68), rgba(101,213,255,.08), rgba(255,159,69,.1), rgba(0,0,0,.7));
+    }
+
+    body[data-static="true"] .failure-overlay::before {
+      opacity: .72;
+      background:
+        linear-gradient(90deg, transparent, rgba(101,213,255,.16), transparent),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.2) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(101,213,255,.1) 0 2px, rgba(255,159,69,.12) 2px 4px, transparent 4px 7px),
+        radial-gradient(circle at 50% 52%, rgba(101,213,255,.16), transparent 45%);
+      animation: electricInterference .08s steps(2, end) infinite;
+    }
+
+    .failure-warning,
+    .blackout,
+    .access-granted {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      transform: scale(1);
+      filter: blur(0);
+      transition: opacity .52s cubic-bezier(.22,.72,.22,1), transform .52s cubic-bezier(.22,.72,.22,1), filter .52s ease;
+    }
+
+    .failure-warning {
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 49%, rgba(255,159,69,.08), transparent 32%),
+        radial-gradient(circle at 50% 51%, rgba(101,213,255,.08), transparent 38%),
+        rgba(0,0,0,.9);
+    }
+
+    body[data-phase="blackout"] .failure-warning,
+    body[data-phase="granted"] .failure-warning {
+      opacity: 0;
+      transform: scale(.985);
+      filter: blur(10px);
+    }
+
+    body[data-phase="blackout"] .failure-warning {
+      opacity: 1;
+      transform: scale(1);
+      filter: none;
+      animation: warningSignalCollapse .66s cubic-bezier(.16,.78,.18,1) forwards;
+    }
+
+    .error-plate,
+    .error-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .error-plate {
+      object-fit: cover;
+      display: none;
+      opacity: 0;
+      transform: scale(1.095);
+      filter: saturate(1.15) contrast(1.12) brightness(.8);
+      transition: opacity .42s ease;
+      will-change: opacity, transform, filter;
+    }
+
+    .error-canvas {
+      z-index: 0;
+      opacity: 0;
+      mix-blend-mode: screen;
+      transition: opacity .36s ease;
+    }
+
+    body[data-phase="warning"] .error-plate {
+      opacity: 0;
+      animation: none;
+    }
+
+    body[data-phase="warning"] .error-canvas {
+      opacity: .5;
+      animation: errorCanvasBloom .72s cubic-bezier(.16,.84,.18,1) forwards;
+    }
+
+    body[data-static="true"] .error-plate {
+      opacity: 0;
+      animation: none;
+    }
+
+    body[data-static="true"] .error-canvas {
+      opacity: .62;
+    }
+
+    .warning-shutters {
+      position: absolute;
+      inset: -2px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .warning-shutters span {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 52%;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,1), rgba(0,0,0,.96)),
+        linear-gradient(90deg, transparent, rgba(101,213,255,.14), rgba(255,159,69,.18), transparent);
+      box-shadow: 0 0 70px rgba(255,159,69,.28), 0 0 44px rgba(101,213,255,.18);
+      transform: translateY(0);
+    }
+
+    .warning-shutters span:first-child {
+      top: 0;
+      transform-origin: top;
+    }
+
+    .warning-shutters span:last-child {
+      bottom: 0;
+      transform-origin: bottom;
+    }
+
+    body[data-phase="warning"] .warning-shutters span:first-child {
+      animation: shutterTop .86s cubic-bezier(.14,.82,.18,1) .06s forwards;
+    }
+
+    body[data-phase="warning"] .warning-shutters span:last-child {
+      animation: shutterBottom .86s cubic-bezier(.14,.82,.18,1) .06s forwards;
+    }
+
+    .failure-warning::before,
+    .failure-warning::after,
+    .blackout::before,
+    .blackout::after,
+    .access-granted::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .failure-warning::before {
+      inset: 0;
+      opacity: 0;
+      background:
+        radial-gradient(ellipse at 50% 50%, transparent 0 31%, rgba(0,0,0,.34) 66%, rgba(0,0,0,.94) 100%),
+        linear-gradient(180deg, rgba(255,255,255,.03), transparent 13%, transparent 84%, rgba(0,0,0,.7));
+      mix-blend-mode: normal;
+      transition: opacity .22s ease;
+    }
+
+    .failure-warning::after {
+      inset: 0;
+      opacity: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 5px),
+        linear-gradient(90deg, transparent, rgba(255,159,69,.1), transparent 46%, rgba(0,178,255,.1), transparent);
+      mix-blend-mode: screen;
+      transition: opacity .16s ease;
+    }
+
+    body[data-phase="warning"] .failure-warning::before {
+      opacity: .78;
+    }
+
+    body[data-phase="warning"] .failure-warning::after {
+      opacity: .46;
+      animation: errorScanlineDrift .82s linear infinite;
+    }
+
+    body[data-static="true"] .failure-warning::before {
+      opacity: .82;
+    }
+
+    body[data-static="true"] .failure-warning::after {
+      opacity: .5;
+      animation: errorScanlineDrift .45s linear infinite;
+    }
+
+    .failure-card {
+      position: relative;
+      z-index: 3;
+      width: min(1060px, calc(100vw - 46px));
+      min-height: min(560px, calc(100svh - 96px));
+      border: 1px solid rgba(233,239,231,.78);
+      border-radius: 5px;
+      background:
+        linear-gradient(rgba(238,239,224,.13) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(238,239,224,.1) 1px, transparent 1px),
+        radial-gradient(circle at 50% 48%, rgba(255,159,69,.12), transparent 18%),
+        radial-gradient(circle at 50% 50%, rgba(101,213,255,.08), transparent 36%),
+        linear-gradient(180deg, rgba(2,5,8,.95), rgba(3,4,5,.98));
+      background-size: 100% 25px, 62px 100%, auto, auto, auto;
+      box-shadow:
+        0 0 0 22px rgba(0,0,0,.72),
+        0 0 0 24px rgba(238,239,224,.72),
+        0 0 0 30px rgba(0,0,0,.9),
+        0 0 90px rgba(255,159,69,.18),
+        0 0 70px rgba(101,213,255,.16),
+        0 26px 120px rgba(0,0,0,.8),
+        inset 0 0 64px rgba(0,0,0,.82);
+      display: grid;
+      place-items: center;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+      padding: clamp(28px, 5vw, 62px);
+      opacity: 0;
+      transform: translate3d(0, 20px, 0) scale(.98);
+      backdrop-filter: blur(6px);
+      isolation: isolate;
+      overflow: hidden;
+    }
+
+    body[data-phase="warning"] .failure-card {
+      animation:
+        tvBoot .62s cubic-bezier(.16,.86,.18,1) .16s forwards,
+        tvSignalFlicker 1.72s steps(1, end) .82s infinite;
+    }
+
+    body[data-static="true"] .failure-card {
+      animation: tvStaticFlicker .56s steps(1, end) infinite;
+    }
+
+    body[data-phase="blackout"] .failure-card {
+      opacity: 1;
+      animation: tvCollapseToBlackbox .66s cubic-bezier(.16,.78,.18,1) forwards;
+    }
+
+    .failure-card::before,
+    .failure-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .failure-kicker,
+    .error-code,
+    .warning-copy,
+    .failure-meter {
+      position: relative;
+      z-index: 1;
+    }
+
+    .failure-card::before {
+      inset: clamp(16px, 3vw, 30px);
+      border: 1px solid rgba(238,239,224,.58);
+      border-radius: 3px;
+      background:
+        radial-gradient(circle at center, transparent 0 31%, rgba(238,239,224,.22) 31.4% 31.8%, transparent 32.2%),
+        linear-gradient(90deg, transparent 0 49.8%, rgba(238,239,224,.18) 50%, transparent 50.2%),
+        linear-gradient(0deg, transparent 0 49.8%, rgba(238,239,224,.18) 50%, transparent 50.2%);
+      opacity: .72;
+      mix-blend-mode: screen;
+    }
+
+    .failure-card::after {
+      background:
+        radial-gradient(circle at 48% 48%, transparent 0 28%, rgba(0,0,0,.28) 58%, rgba(0,0,0,.6) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.12) 0 1px, transparent 1px 4px),
+        linear-gradient(90deg, rgba(101,213,255,.12), transparent 38%, rgba(255,159,69,.14));
+      opacity: .5;
+      mix-blend-mode: screen;
+      animation: tvNoiseDrift .3s steps(2, end) infinite;
+    }
+
+    .failure-kicker {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin: 0 0 16px;
+      color: rgba(238,239,224,.66);
+      font-size: clamp(11px, 1.6vw, 13px);
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .failure-kicker::after {
+      content: none;
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(101,213,255,.58), transparent);
+      box-shadow: 0 0 14px rgba(101,213,255,.5);
+    }
+
+    .error-code {
+      position: relative;
+      margin: 0 0 14px;
+      color: #eee9dc;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(44px, 10vw, 118px);
+      line-height: .86;
+      font-weight: 950;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      text-shadow:
+        3px 0 rgba(101,213,255,.78),
+        -3px 0 rgba(255,159,69,.72),
+        0 0 22px rgba(238,239,224,.34);
+      animation: errorFlicker 1.1s steps(1, end) infinite, warningTextChroma .28s steps(2, end) infinite;
+    }
+
+    .error-code::before,
+    .error-code::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      opacity: .45;
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+
+    .error-code::before {
+      color: #48dfff;
+      transform: translate3d(3px, 0, 0);
+      clip-path: inset(0 0 52% 0);
+    }
+
+    .error-code::after {
+      color: #ffb45c;
+      transform: translate3d(-3px, 0, 0);
+      clip-path: inset(48% 0 0 0);
+    }
+
+    .warning-copy {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      color: rgba(238,239,224,.9);
+      font-size: clamp(16px, 2.4vw, 24px);
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .warning-copy span {
+      display: block;
+      border-left: 0;
+      padding-left: 0;
+    }
+
+    .failure-meter {
+      display: grid;
+      grid-template-columns: repeat(16, minmax(0, 1fr));
+      gap: 6px;
+      width: min(720px, 82%);
+      margin-top: clamp(20px, 3vw, 32px);
+    }
+
+    .failure-meter i {
+      height: 7px;
+      background: linear-gradient(90deg, rgba(255,159,69,.95), rgba(238,239,224,.72), rgba(101,213,255,.82));
+      box-shadow: 0 0 16px rgba(255,159,69,.24), 0 0 14px rgba(101,213,255,.18);
+      transform-origin: left;
+      animation: meterPulse .9s ease-in-out infinite;
+      animation-delay: calc(var(--i) * -0.055s);
+    }
+
+    .blackout {
+      background:
+        radial-gradient(circle at 48% 46%, rgba(101,213,255,.055), transparent 32%),
+        radial-gradient(circle at 52% 50%, rgba(255,159,69,.04), transparent 46%),
+        #000;
+    }
+
+    .blackout::before {
+      opacity: .32;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.075) 0 1px, transparent 1px 5px),
+        linear-gradient(90deg, rgba(101,213,255,.08), transparent 42%, rgba(255,159,69,.08)),
+        radial-gradient(circle at 50% 48%, rgba(238,239,224,.06), transparent 42%);
+      mix-blend-mode: screen;
+      filter: saturate(.9) contrast(1.18);
+      animation: blackboxNoiseDrift 1.41s steps(4, end) infinite;
+    }
+
+    .blackout::after {
+      opacity: .36;
+      background:
+        radial-gradient(ellipse at 50% 50%, transparent 0 38%, rgba(0,0,0,.62) 72%),
+        linear-gradient(90deg, rgba(255,159,69,.055), transparent 45%, rgba(101,213,255,.06));
+    }
+
+    body[data-phase="blackout"] .blackout {
+      animation: blackboxSignalIn .78s cubic-bezier(.16,.78,.18,1) forwards;
+    }
+
+    .access-granted {
+      background:
+        radial-gradient(circle at 50% 42%, rgba(130,255,210,.16), transparent 32%),
+        linear-gradient(rgba(101,213,255,.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101,213,255,.045) 1px, transparent 1px),
+        #02080c;
+      background-size: auto, 38px 38px, 38px 38px, auto;
+      pointer-events: none;
+    }
+
+    body[data-phase="granted"] .access-granted {
+      animation: accessWash 3s cubic-bezier(.18,.72,.22,1) forwards;
+    }
+
+    .access-granted::before {
+      background:
+        radial-gradient(circle at 50% 44%, rgba(255,159,69,.24), transparent 26%),
+        linear-gradient(90deg, rgba(255,159,69,.18), transparent 48%, rgba(101,213,255,.16));
+      mix-blend-mode: screen;
+    }
+
+    body[data-phase="granted"] .access-granted::before {
+      animation: accessRedToGreen 3s cubic-bezier(.2,.76,.18,1) forwards;
+    }
+
+    .access-panel {
+      position: relative;
+      z-index: 1;
+      width: min(680px, calc(100vw - 44px));
+      border: 1px solid rgba(130,255,210,.48);
+      background:
+        linear-gradient(180deg, rgba(8,30,28,.86), rgba(2,8,12,.94)),
+        linear-gradient(90deg, transparent, rgba(130,255,210,.08), transparent);
+      box-shadow: 0 0 90px rgba(130,255,210,.18), inset 0 1px 0 rgba(255,255,255,.08);
+      padding: clamp(26px, 5vw, 44px);
+    }
+
+    body[data-phase="granted"] .access-panel {
+      animation: accessPanelShift 3s cubic-bezier(.2,.76,.18,1) forwards;
+    }
+
+    .access-panel b {
+      display: block;
+      color: var(--mint);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .access-panel strong {
+      display: block;
+      margin-top: 12px;
+      color: #f3fffb;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(38px, 7vw, 72px);
+      line-height: .95;
+      text-shadow: 0 0 24px rgba(130,255,210,.32);
+    }
+
+    body[data-phase="granted"] .access-panel strong {
+      animation: accessTextShift 3s cubic-bezier(.2,.76,.18,1) forwards;
+    }
+
+    .access-panel span {
+      display: block;
+      margin-top: 16px;
+      color: rgba(236,248,243,.64);
+      font-size: 14px;
+    }
+
+    .access-loader {
+      position: relative;
+      height: 8px;
+      margin-top: 28px;
+      border: 1px solid rgba(130,255,210,.34);
+      overflow: hidden;
+      background: rgba(4,13,19,.8);
+    }
+
+    .access-loader::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 100%;
+      transform-origin: left;
+      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
+      box-shadow: 0 0 18px rgba(130,255,210,.54);
+    }
+
+    body[data-phase="granted"] .access-loader::before {
+      animation: accessLoad 2.15s cubic-bezier(.2,.78,.2,1) forwards;
+    }
+
+    .blackbox-window {
+      position: relative;
+      z-index: 1;
+      width: min(640px, calc(100vw - 42px));
+      border: 1px solid rgba(238,239,224,.5);
+      border-radius: 4px;
+      background:
+        linear-gradient(rgba(238,239,224,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101,213,255,.055) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(3,8,10,.92), rgba(2,5,7,.98));
+      background-size: 100% 18px, 42px 100%, auto;
+      box-shadow:
+        0 0 0 12px rgba(0,0,0,.62),
+        0 0 0 14px rgba(238,239,224,.36),
+        0 0 80px rgba(101,213,255,.18),
+        inset 0 1px 0 rgba(255,255,255,.08);
+      color: rgba(236,248,243,.92);
+      overflow: hidden;
+      transform-origin: center;
+    }
+
+    body[data-phase="blackout"] .blackbox-window {
+      animation: blackboxWindowIn .78s cubic-bezier(.16,.78,.18,1) forwards, blackboxPlaybackFlicker 2.73s steps(1, end) .82s infinite;
+    }
+
+    .blackbox-window::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.1) 0 1px, transparent 1px 4px),
+        linear-gradient(90deg, rgba(255,159,69,.08), transparent 42%, rgba(101,213,255,.1));
+      opacity: .34;
+      mix-blend-mode: screen;
+      animation: blackboxWindowScan 1.07s steps(5, end) infinite;
+    }
+
+    .blackbox-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 44px;
+      border-bottom: 1px solid rgba(101,213,255,.24);
+      padding: 0 16px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .blackbox-head::after {
+      content: "";
+      width: 74px;
+      height: 5px;
+      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
+      box-shadow: 0 0 18px rgba(130,255,210,.44);
+    }
+
+    .blackbox-body {
+      padding: clamp(22px, 5vw, 34px);
+    }
+
+    .blackbox-body b {
+      display: block;
+      color: var(--cyan);
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .blackbox-body strong {
+      display: block;
+      margin-top: 10px;
+      color: #fff;
+      font-size: clamp(24px, 5vw, 42px);
+      line-height: .96;
+      font-family: Georgia, "Times New Roman", serif;
+      text-shadow: 0 0 18px rgba(101,213,255,.34);
+    }
+
+    .blackbox-body p {
+      display: block;
+      margin: 14px 0 0;
+      color: rgba(236,248,243,.58);
+      font-size: 14px;
+    }
+
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 82px;
+      margin-top: 24px;
+      padding: 0 4px;
+      border-top: 1px solid rgba(101,213,255,.15);
+      border-bottom: 1px solid rgba(101,213,255,.15);
+    }
+
+    .waveform i {
+      flex: 1;
+      max-width: 10px;
+      height: 18px;
+      background: linear-gradient(180deg, var(--cyan), var(--mint));
+      box-shadow: 0 0 12px rgba(130,255,210,.36);
+      transform-origin: center;
+      animation: wavePulse .74s ease-in-out infinite;
+      animation-delay: calc(var(--i) * -0.05s);
+    }
+
+    body:not([data-armed="true"]) .record-shell,
+    body:not([data-armed="true"]) .stamp-mark,
+    body:not([data-armed="true"]) .impact-ring,
+    body:not([data-armed="true"]) .scanner-carriage,
+    body:not([data-armed="true"]) .scan-light,
+    body:not([data-armed="true"]) .pressure-pad,
+    body:not([data-armed="true"]) .readout div::before,
+    body:not([data-armed="true"]) .progress span,
+    body:not([data-armed="true"]) .complete,
+    html[data-frame] .record-shell,
+    html[data-frame] .stamp-mark,
+    html[data-frame] .impact-ring,
+    html[data-frame] .scanner-carriage,
+    html[data-frame] .scan-light,
+    html[data-frame] .pressure-pad,
+    html[data-frame] .readout div::before,
+    html[data-frame] .progress span,
+    html[data-frame] .complete {
+      animation-delay: var(--frame-time) !important;
+      animation-play-state: paused !important;
+    }
+
+    @keyframes recordEnter {
+      0% { opacity: 0; transform: translate3d(-50%, -47%, 0) scale(.96); }
+      12%, 100% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1); }
+    }
+
+    @keyframes bayPower {
+      0%, 20% {
+        border-color: rgba(101,213,255,.32);
+        box-shadow: 0 0 0 1px rgba(130,255,210,.08), 0 24px 80px rgba(0,0,0,.42);
+      }
+      58% {
+        border-color: rgba(130,255,210,.58);
+        box-shadow: 0 0 0 1px rgba(130,255,210,.22), 0 0 70px rgba(101,213,255,.16), 0 24px 80px rgba(0,0,0,.42);
+      }
+      82%, 100% {
+        border-color: rgba(255,159,69,.62);
+        box-shadow: 0 0 0 1px rgba(255,159,69,.18), 0 0 90px rgba(255,159,69,.18), 0 24px 80px rgba(0,0,0,.42);
+      }
+    }
+
+    @keyframes glassSweep {
+      0%, 12% { opacity: 0; transform: translateX(-78%) skewX(-10deg); }
+      22%, 30% { opacity: .8; }
+      52% { opacity: .18; transform: translateX(78%) skewX(-10deg); }
+      74% { opacity: .42; transform: translateX(-18%) skewX(-10deg); }
+      92%, 100% { opacity: 0; transform: translateX(92%) skewX(-10deg); }
+    }
+
+    @keyframes scannerTravel {
+      0%, 9% { opacity: 0; transform: translate3d(-50%, -122%, 0); }
+      14% { opacity: 1; transform: translate3d(-50%, -92%, 0); }
+      38% { opacity: 1; transform: translate3d(-50%, 34%, 0); }
+      50%, 60% { opacity: 1; transform: translate3d(-50%, 98%, 0); }
+      82% { opacity: 1; transform: translate3d(-50%, 208%, 0); }
+      92%, 100% { opacity: 0; transform: translate3d(-50%, 244%, 0); }
+    }
+
+    @keyframes scanGlow {
+      0%, 10%, 88%, 100% { opacity: 0; }
+      16%, 78% { opacity: .92; }
+      52%, 59% { opacity: .42; }
+    }
+
+    @keyframes padPulse {
+      0%, 47%, 63%, 100% { opacity: 0; transform: scale(.82); }
+      51%, 59% { opacity: .88; transform: scale(1); }
+    }
+
+    @keyframes embossReveal {
+      0%, 57% { opacity: 0; transform: scale(1.16); }
+      60% { opacity: .24; transform: scale(1.1); }
+      68%, 100% { opacity: .64; transform: scale(1.04); }
+    }
+
+    @keyframes impactRing {
+      0%, 56% { opacity: 0; transform: scale(.55); }
+      59% { opacity: .92; transform: scale(.72); }
+      68% { opacity: 0; transform: scale(1.46); }
+      100% { opacity: 0; }
+    }
+
+    @keyframes statusBar {
+      0%, 22% { transform: scaleY(0); }
+      32%, 100% { transform: scaleY(1); }
+    }
+
+    @keyframes progressFrameFail {
+      0%, 78% {
+        border-color: rgba(101,213,255,.35);
+        box-shadow: none;
+      }
+      84%, 100% {
+        border-color: rgba(255,63,63,.72);
+        box-shadow: 0 0 22px rgba(255,63,63,.24);
+      }
+    }
+
+    @keyframes progressFail {
+      0%, 8% {
+        transform: scaleX(0);
+        transform-origin: left;
+        background: linear-gradient(90deg, var(--cyan), var(--mint), var(--amber));
+        box-shadow: 0 0 24px rgba(130,255,210,.6);
+      }
+      28% { transform: scaleX(.34); }
+      58% { transform: scaleX(.74); }
+      76% { transform: scaleX(.96); }
+      82% {
+        transform: scaleX(1);
+        transform-origin: left;
+        background: linear-gradient(90deg, var(--danger), #ff7a4f);
+        box-shadow: 0 0 26px rgba(255,63,63,.6);
+      }
+      89% {
+        transform: scaleX(.05);
+        transform-origin: right;
+        background: linear-gradient(90deg, var(--danger), #ff7a4f);
+        box-shadow: 0 0 34px rgba(255,63,63,.74);
+      }
+      100% {
+        transform: scaleX(0);
+        transform-origin: right;
+        background: linear-gradient(90deg, var(--danger), #ff7a4f);
+        box-shadow: none;
+      }
+    }
+
+    @keyframes failNotice {
+      0%, 77% { opacity: 0; transform: translateY(8px); color: var(--mint); }
+      82% { opacity: 1; transform: translateY(0); color: var(--danger); }
+      87% { opacity: .28; transform: translateX(-2px); }
+      91%, 100% { opacity: 1; transform: translateX(0); color: var(--danger); }
+    }
+
+    @keyframes underlaySignalFlicker {
+      0%, 8%, 28%, 34%, 57%, 63%, 100% {
+        opacity: .08;
+        filter: grayscale(.25) blur(1px) brightness(.6) contrast(1.26) saturate(.7);
+      }
+      9%, 12%, 35%, 38%, 64%, 66% {
+        opacity: .36;
+        filter: grayscale(.08) blur(.3px) brightness(.92) contrast(1.1) saturate(.95);
+      }
+      48%, 50% {
+        opacity: .02;
+        filter: brightness(.28) contrast(1.8);
+      }
+    }
+
+    @keyframes broadcastBreath {
+      0%, 100% { opacity: .34; transform: translate3d(0, 0, 0); }
+      12%, 15% { opacity: .76; transform: translate3d(-8px, 0, 0); }
+      36%, 38% { opacity: .18; transform: translate3d(6px, 0, 0); }
+      60%, 63% { opacity: .68; transform: translate3d(0, -2px, 0); }
+    }
+
+    @keyframes tvBoot {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, 18px, 0) scale(.94);
+        clip-path: inset(49% 0 49% 0);
+        filter: brightness(2.2) blur(8px) contrast(1.8);
+      }
+      34% {
+        opacity: .95;
+        transform: translate3d(0, 0, 0) scale(1.02);
+        clip-path: inset(44% 0 44% 0);
+      }
+      62% {
+        opacity: .18;
+        clip-path: inset(0 0 0 0);
+        filter: brightness(.4) blur(1px) contrast(2.1);
+      }
+      76% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1.16) blur(0) contrast(1.12);
+      }
+      100% {
+        opacity: .9;
+        transform: translate3d(0, 0, 0) scale(1);
+        clip-path: inset(0 0 0 0);
+        filter: brightness(.96) blur(0) contrast(1.18);
+      }
+    }
+
+    @keyframes tvSignalFlicker {
+      0%, 6%, 18%, 24%, 38%, 52%, 66%, 82%, 94%, 100% {
+        opacity: .94;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(.94) contrast(1.18) saturate(.95);
+      }
+      7%, 17%, 53%, 65% {
+        opacity: .035;
+        transform: translate3d(0, 1px, 0) scale(.998);
+        filter: brightness(.12) contrast(2.4) saturate(.42);
+      }
+      25%, 37% {
+        opacity: .44;
+        transform: translate3d(-8px, 0, 0) scale(1.002);
+        filter: brightness(1.45) contrast(1.52) saturate(1.15);
+      }
+      83%, 93% {
+        opacity: .12;
+        transform: translate3d(7px, -1px, 0) scale(.998);
+        filter: brightness(.32) contrast(2.1) saturate(.72);
+      }
+    }
+
+    @keyframes tvStaticFlicker {
+      0%, 8%, 30%, 42%, 58%, 70%, 88%, 100% {
+        opacity: .92;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1) contrast(1.24);
+      }
+      9%, 24%, 43%, 54%, 71%, 82% {
+        opacity: .025;
+        transform: translate3d(0, 0, 0) scale(.996);
+        filter: brightness(.08) contrast(2.5);
+      }
+      25%, 29%, 55%, 57%, 83%, 87% {
+        opacity: .46;
+        transform: translate3d(-10px, 1px, 0) scale(1.004);
+        filter: brightness(1.55) contrast(1.7);
+      }
+    }
+
+    @keyframes tvCollapseToBlackbox {
+      0% {
+        opacity: .94;
+        transform: translate3d(0, 0, 0) scale(1);
+        clip-path: inset(0 0 0 0);
+        filter: brightness(1) contrast(1.2);
+      }
+      18% {
+        opacity: .38;
+        transform: translate3d(0, -8px, 0) scale(1.03);
+        clip-path: inset(24% 0 24% 0);
+        filter: brightness(2.2) contrast(2.2) blur(1px);
+      }
+      42% {
+        opacity: .72;
+        transform: translate3d(0, 16px, 0) scale(.82);
+        clip-path: inset(43% 8% 43% 8%);
+        filter: brightness(1.9) contrast(2.3) blur(2px);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(0, 54px, 0) scale(.38);
+        clip-path: inset(49% 30% 49% 30%);
+        filter: brightness(.22) contrast(2.4) blur(14px);
+      }
+    }
+
+    @keyframes warningSignalCollapse {
+      0%, 32% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes warningJitter {
+      0% { transform: translate3d(0,0,0) skewX(-1deg); }
+      22% { transform: translate3d(-9px,2px,0) skewX(-1deg); }
+      44% { transform: translate3d(7px,-1px,0) skewX(1deg); }
+      66% { transform: translate3d(-3px,0,0) skewX(-1deg); }
+      82% { transform: translate3d(4px,2px,0) skewX(0); }
+      100% { transform: translate3d(0,0,0) skewX(0); }
+    }
+
+    @keyframes warningCardHold {
+      0%, 100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: brightness(1); }
+      48% { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.004); filter: brightness(1.08); }
+      52% { opacity: 1; transform: translate3d(1px, 0, 0) scale(1.002); }
+    }
+
+    @keyframes warningCardIgnite {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, 24px, 0) scale(.96);
+        filter: blur(8px) brightness(1.6);
+      }
+      42% {
+        opacity: 1;
+        transform: translate3d(0, -4px, 0) scale(1.018);
+        filter: blur(0) brightness(1.32);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: blur(0) brightness(1);
+      }
+    }
+
+    @keyframes warningCardStatic {
+      0%, 100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: brightness(1.04); }
+      36% { opacity: .98; transform: translate3d(-2px, 1px, 0) scale(1.004); filter: brightness(1.2); }
+      62% { opacity: 1; transform: translate3d(2px, -1px, 0) scale(1.002); }
+    }
+
+    @keyframes errorFlicker {
+      0%, 100% { opacity: 1; }
+      42% { opacity: .78; }
+      56% { opacity: .98; }
+      78% { opacity: .86; }
+    }
+
+    @keyframes chamberPlateIn {
+      0% { opacity: 0; transform: scale(1.18) translate3d(0, 28px, 0); filter: saturate(1.46) contrast(1.34) brightness(.38); }
+      48% { opacity: .98; transform: scale(1.105) translate3d(0, -4px, 0); filter: saturate(1.28) contrast(1.2) brightness(.86); }
+      100% { opacity: .95; transform: scale(1.095) translate3d(0, 0, 0); filter: saturate(1.15) contrast(1.12) brightness(.8); }
+    }
+
+    @keyframes chamberPlateBreathe {
+      0%, 100% { transform: scale(1.095) translate3d(0, 0, 0); filter: saturate(1.15) contrast(1.12) brightness(.8); }
+      42% { transform: scale(1.12) translate3d(-8px, 4px, 0); filter: saturate(1.22) contrast(1.18) brightness(.9); }
+      72% { transform: scale(1.105) translate3d(7px, -5px, 0); }
+    }
+
+    @keyframes chamberStaticPulse {
+      0%, 100% { transform: scale(1.108) translate3d(0, 0, 0); filter: saturate(1.2) contrast(1.18) brightness(.86); }
+      45% { transform: scale(1.13) translate3d(-4px, 2px, 0); filter: saturate(1.36) contrast(1.32) brightness(.98); }
+      55% { transform: scale(1.116) translate3d(3px, -2px, 0); }
+    }
+
+    @keyframes errorCanvasBloom {
+      0% { opacity: 0; filter: blur(12px); }
+      52% { opacity: .68; filter: blur(0); }
+      100% { opacity: .5; filter: blur(0); }
+    }
+
+    @keyframes shutterTop {
+      0% { transform: translateY(0); }
+      34% { transform: translateY(0); }
+      100% { transform: translateY(-110%); }
+    }
+
+    @keyframes shutterBottom {
+      0% { transform: translateY(0); }
+      34% { transform: translateY(0); }
+      100% { transform: translateY(110%); }
+    }
+
+    @keyframes errorScanlineDrift {
+      0% { background-position: 0 0, 0 0; }
+      100% { background-position: 0 21px, 40px 0; }
+    }
+
+    @keyframes warningBandFlow {
+      0% {
+        transform: translate3d(-12px, 0, 0) scale(1.04);
+        background-position: 0 0, 0 0, 0 0, 0 0, center;
+        clip-path: inset(0 0 0 0);
+      }
+      33% {
+        transform: translate3d(18px, -8px, 0) scale(1.055);
+        background-position: 42px -18px, -24px 11px, 0 16px, 26px 0, center;
+        clip-path: inset(9% 0 3% 0);
+      }
+      66% {
+        transform: translate3d(-7px, 6px, 0) scale(1.045);
+        background-position: -38px 14px, 20px -7px, 0 -12px, -18px 0, center;
+        clip-path: inset(2% 0 13% 0);
+      }
+      100% {
+        transform: translate3d(0, 0, 0) scale(1.04);
+        background-position: 0 0, 0 0, 0 0, 0 0, center;
+        clip-path: inset(0 0 0 0);
+      }
+    }
+
+    @keyframes warningBlockBurst {
+      0% { transform: translateX(0) skewX(0); filter: hue-rotate(0deg) saturate(1.2); }
+      24% { transform: translateX(-28px) skewX(-2deg); filter: hue-rotate(18deg) saturate(1.6); }
+      52% { transform: translateX(18px) skewX(1deg); filter: hue-rotate(-30deg) saturate(1.35); }
+      76% { transform: translateX(36px) skewX(-1deg); filter: hue-rotate(42deg) saturate(1.8); }
+      100% { transform: translateX(0) skewX(0); filter: hue-rotate(0deg) saturate(1.2); }
+    }
+
+    @keyframes warningTextChroma {
+      0%, 100% {
+        text-shadow: 2px 0 rgba(101,213,255,.76), -2px 0 rgba(255,159,69,.72), 0 0 30px rgba(255,159,69,.44);
+      }
+      50% {
+        text-shadow: -3px 0 rgba(101,213,255,.78), 3px 0 rgba(255,193,92,.58), 0 0 34px rgba(101,213,255,.36);
+      }
+    }
+
+    @keyframes meterPulse {
+      0%, 100% { opacity: .34; transform: scaleX(.28); }
+      44% { opacity: 1; transform: scaleX(1); }
+      68% { opacity: .72; transform: scaleX(.66); }
+    }
+
+    @keyframes warningTextureDrift {
+      0% { transform: translate3d(0, 0, 0) scale(1.02); clip-path: inset(0 0 0 0); }
+      28% { transform: translate3d(-14px, 3px, 0) scale(1.025); clip-path: inset(5% 0 0 0); }
+      54% { transform: translate3d(10px, -2px, 0) scale(1.018); clip-path: inset(0 0 8% 0); }
+      100% { transform: translate3d(0, 0, 0) scale(1.02); clip-path: inset(0 0 0 0); }
+    }
+
+    @keyframes warningGlitchBands {
+      0% { transform: translateX(0) skewX(0); }
+      35% { transform: translateX(-18px) skewX(-1deg); }
+      68% { transform: translateX(15px) skewX(1deg); }
+      100% { transform: translateX(0) skewX(0); }
+    }
+
+    @keyframes blackboxNoiseDrift {
+      0% { transform: translate3d(0,0,0) scale(1.02); opacity: .2; }
+      35% { transform: translate3d(8px,-3px,0) scale(1.025); opacity: .42; }
+      70% { transform: translate3d(-6px,4px,0) scale(1.018); opacity: .26; }
+      100% { transform: translate3d(0,0,0) scale(1.02); opacity: .34; }
+    }
+
+    @keyframes blackboxSignalIn {
+      0%, 10% {
+        opacity: 0;
+        filter: brightness(2.2) blur(12px);
+        transform: scale(.96);
+      }
+      24% {
+        opacity: .22;
+        filter: brightness(.3) blur(2px);
+      }
+      42% {
+        opacity: 1;
+        filter: brightness(1.35) blur(0);
+        transform: scale(1.018);
+      }
+      100% {
+        opacity: 1;
+        filter: brightness(1) blur(0);
+        transform: scale(1);
+      }
+    }
+
+    @keyframes blackboxWindowIn {
+      0%, 8% {
+        opacity: 0;
+        transform: translate3d(0, 44px, 0) scale(.62);
+        clip-path: inset(49% 12% 49% 12%);
+        filter: brightness(2) blur(8px);
+      }
+      34% {
+        opacity: .9;
+        transform: translate3d(0, -6px, 0) scale(1.04);
+        clip-path: inset(0 0 0 0);
+        filter: brightness(1.45) blur(1px);
+      }
+      62%, 100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        clip-path: inset(0 0 0 0);
+        filter: brightness(1) blur(0);
+      }
+    }
+
+    @keyframes blackboxPlaybackFlicker {
+      0%, 11%, 14%, 29%, 35%, 47%, 52%, 71%, 78%, 91%, 100% {
+        opacity: 1;
+        transform: translate3d(0,0,0) scale(1);
+        filter: brightness(1) contrast(1.08);
+      }
+      12%, 13%, 48%, 51%, 92%, 94% {
+        opacity: .36;
+        transform: translate3d(3px,0,0) scale(.998);
+        filter: brightness(.46) contrast(1.84);
+      }
+      30%, 34%, 72%, 77% {
+        opacity: .76;
+        transform: translate3d(-5px,1px,0) scale(1.003);
+        filter: brightness(1.32) contrast(1.34);
+      }
+      57%, 59% {
+        opacity: .12;
+        transform: translate3d(0,0,0) scale(.994);
+        filter: brightness(.18) contrast(2.1);
+      }
+    }
+
+    @keyframes blackboxWindowScan {
+      0% { transform: translateY(0); opacity: .22; }
+      50% { transform: translateY(6px); opacity: .46; }
+      100% { transform: translateY(-3px); opacity: .3; }
+    }
+
+    @keyframes tvNoiseDrift {
+      0% { transform: translate3d(0,0,0); opacity: .38; }
+      50% { transform: translate3d(4px,-2px,0); opacity: .58; }
+      100% { transform: translate3d(-3px,1px,0); opacity: .44; }
+    }
+
+    @keyframes accessWash {
+      0% { background-color: #160b02; }
+      42% { background-color: #091014; }
+      100% { background-color: #02080c; }
+    }
+
+    @keyframes accessRedToGreen {
+      0% { opacity: .78; filter: hue-rotate(0deg) saturate(1.4); transform: translateX(-18px); }
+      54% { opacity: .42; filter: hue-rotate(96deg) saturate(1.1); transform: translateX(8px); }
+      100% { opacity: .12; filter: hue-rotate(138deg) saturate(.9); transform: translateX(0); }
+    }
+
+    @keyframes accessPanelShift {
+      0% {
+        border-color: rgba(255,159,69,.68);
+        box-shadow: 0 0 90px rgba(255,159,69,.18), inset 0 1px 0 rgba(255,255,255,.08);
+        transform: translateY(4px);
+      }
+      45% {
+        border-color: rgba(255,159,69,.5);
+        box-shadow: 0 0 80px rgba(255,159,69,.12), inset 0 1px 0 rgba(255,255,255,.08);
+      }
+      100% {
+        border-color: rgba(130,255,210,.48);
+        box-shadow: 0 0 90px rgba(130,255,210,.18), inset 0 1px 0 rgba(255,255,255,.08);
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes accessTextShift {
+      0% {
+        color: #ffe2bd;
+        text-shadow: 2px 0 rgba(101,213,255,.42), -2px 0 rgba(255,159,69,.72), 0 0 24px rgba(255,159,69,.32);
+      }
+      45% {
+        color: #fff3de;
+        text-shadow: 1px 0 rgba(101,213,255,.35), -1px 0 rgba(255,159,69,.5), 0 0 22px rgba(255,159,69,.22);
+      }
+      100% {
+        color: #f3fffb;
+        text-shadow: 0 0 24px rgba(130,255,210,.32);
+      }
+    }
+
+    @keyframes interferenceShift {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(-9px); }
+      100% { transform: translateX(7px); }
+    }
+
+    @keyframes electricInterference {
+      0% { transform: translate3d(0, 0, 0); filter: contrast(1.1); }
+      33% { transform: translate3d(-7px, 2px, 0); filter: contrast(1.55); }
+      66% { transform: translate3d(6px, -1px, 0); filter: contrast(1.25); }
+      100% { transform: translate3d(0, 0, 0); filter: contrast(1.4); }
+    }
+
+    @keyframes accessLoad {
+      0% { transform: scaleX(.04); }
+      38% { transform: scaleX(.45); }
+      74% { transform: scaleX(.82); }
+      100% { transform: scaleX(1); }
+    }
+
+    @keyframes wavePulse {
+      0%, 100% { transform: scaleY(.24); opacity: .44; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+
+      .stage {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 10px;
+        width: 100%;
+        height: 100svh;
+        min-height: 0;
+        margin: 0;
+        padding: 10px;
+      }
+
+      .record-bay {
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .record-bay::before { inset: 12px; }
+
+      .record-shell {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(95vw, calc((100svh - 344px) * 1.62));
+        margin: 0;
+        transform: translate3d(-50%, -50%, 0);
+        animation-name: recordEnterMobile;
+      }
+
+      .status-panel {
+        margin-top: 0;
+        border-left: 0;
+        border-top: 1px solid rgba(101,213,255,.36);
+        padding: 14px 16px 0;
+      }
+
+      h1 { font-size: 42px; margin-bottom: 12px; }
+      .readout { gap: 8px; margin: 10px 0 14px; }
+      .readout div { padding: 10px 12px 10px 16px; }
+      .readout span { margin-top: 4px; font-size: 14px; }
+      .complete { margin-top: 12px; }
+      .audio-actions button { flex: 1 1 180px; }
+    }
+
+    @keyframes recordEnterMobile {
+      0% { opacity: 0; transform: translate3d(-50%, -46%, 0) scale(.98); }
+      12%, 100% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a" preload="auto"></audio>
+  <audio id="device-ambience" src="assets/device-ambience.m4a" preload="auto" loop></audio>
+  <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
+  <audio id="error-voice" src="assets/error-error-en.m4a" preload="auto"></audio>
+  <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
+  <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
+    <section class="audio-gate-card">
+      <h2 id="audio-gate-title">是否启用音频</h2>
+      <div class="audio-actions">
+        <button type="button" data-audio-choice="enable">启用音频</button>
+        <button type="button" data-audio-choice="skip">跳过音频（不建议）</button>
+      </div>
+    </section>
+  </div>
+  <main class="stage">
+    <section class="record-bay" aria-label="飞行纪录签发动画预览">
+      <div class="record-shell">
+        <img class="record" src="assets/flight-record-default-unstamped.png" alt="飞行纪录">
+        <span class="record-glass"></span>
+        <img class="stamp-mark" src="assets/emboss-stamp-mark-web.png" alt="">
+        <span class="impact-ring"></span>
+        <div class="scanner-carriage" aria-hidden="true">
+          <img class="scanner-device" src="assets/ai-scanner-module-v1.png" alt="">
+          <span class="scan-light"></span>
+          <span class="pressure-pad"></span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="status-panel">
+      <p class="eyebrow">MISSION DEPLOYMENT</p>
+      <h1>签发飞行纪录</h1>
+      <div class="readout" aria-live="polite">
+        <div style="--delay:.2s"><b>01 / ROUTE LOCK</b><span>正在锁定任务目标与返航航道</span></div>
+        <div style="--delay:1.4s"><b>02 / RECORD BUILD</b><span>正在写入任务目标、坐标与飞行日志</span></div>
+        <div style="--delay:2.4s"><b>03 / SCAN SEAL</b><span>电子扫描模组正在压印签发</span></div>
+      </div>
+      <div class="progress" aria-hidden="true"><span></span></div>
+      <p class="complete">SIGNATURE FAILED / 签发失败</p>
+    </aside>
+  </main>
+
+  <div class="failure-overlay" aria-hidden="true">
+    <section class="failure-warning">
+      <img class="error-plate" src="assets/ai-error-chamber-orange-blue-v1.png" alt="">
+      <canvas class="error-canvas"></canvas>
+      <div class="warning-shutters"><span></span><span></span></div>
+      <div class="failure-card">
+        <p class="failure-kicker">Temporal Seal Breach</p>
+        <p class="error-code" data-text="ERROR ERROR">ERROR ERROR</p>
+        <p class="warning-copy">
+          <span>飞行员：夏以昼</span>
+          <span>违反时空管理局规定</span>
+        </p>
+        <div class="failure-meter" aria-hidden="true">
+          <i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i><i style="--i:12"></i><i style="--i:13"></i><i style="--i:14"></i><i style="--i:15"></i><i style="--i:16"></i>
+        </div>
+      </div>
+    </section>
+    <section class="blackout">
+      <div class="blackbox-window">
+        <div class="blackbox-head">Black Box Audio</div>
+        <div class="blackbox-body">
+          <b>Signal Interruption</b>
+          <strong>黑匣音频接入中</strong>
+          <p>Voice channel / Xia Yizhou</p>
+          <div class="waveform" aria-hidden="true">
+            <i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i><i style="--i:12"></i><i style="--i:13"></i><i style="--i:14"></i><i style="--i:15"></i><i style="--i:16"></i><i style="--i:17"></i><i style="--i:18"></i>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const frame = params.get("frame");
+    const frameTimes = {
+      presign: "-2.1s",
+      impact: "-3.45s",
+      complete: "-5.75s"
+    };
+    if (frameTimes[frame]) {
+      document.documentElement.dataset.frame = frame;
+      document.documentElement.style.setProperty("--frame-time", frameTimes[frame]);
+    }
+
+    const audioButtons = document.querySelectorAll("[data-audio-choice]");
+    const signalAudio = document.querySelector("#xia-signal");
+    const deviceAudio = document.querySelector("#device-ambience");
+    const alarmAudio = document.querySelector("#alarm-sound");
+    const errorVoiceAudio = document.querySelector("#error-voice");
+    const electricGlitchAudio = document.querySelector("#electric-glitch");
+    const mediaElements = [signalAudio, deviceAudio, alarmAudio, errorVoiceAudio, electricGlitchAudio];
+    const errorCanvas = document.querySelector(".error-canvas");
+    const errorCtx = errorCanvas.getContext("2d");
+    const stampDuration = 6500;
+    const alarmDuration = 3000;
+    const errorVoiceDuration = 2250;
+    const warningStaticDelay = 950;
+    const electricGlitchDuration = 1850;
+    const blackboxAudioDuration = 8640;
+    const skipBlackboxDuration = 3200;
+    const MIX = Object.freeze({
+      alarm: 0.028,
+      errorVoice: 0.38,
+      electricGlitch: 0.16,
+      blackboxVoice: 0.6,
+      deviceAmbience: 0.07,
+      scannerNoise: 0.055,
+      scannerServo: 0.018,
+      stampThump: 0.034,
+      stampPing: 0.015,
+      fallbackAlarm: 0.004,
+      unlockTone: 0.01,
+      crackleNoise: 0.012,
+      crackleSpark: 0.009,
+      crackleSparkRange: 0.016
+    });
+    let audioCtx = null;
+    let soundReady = false;
+    let sequenceTimers = [];
+    let activeRun = 0;
+    let jumped = false;
+    let errorFrame = 0;
+    let errorStartTime = 0;
+    let errorSparks = [];
+
+    function clearSequenceTimers() {
+      sequenceTimers.forEach((timer) => clearTimeout(timer));
+      sequenceTimers = [];
+    }
+
+    function setPhase(phase) {
+      if (phase) {
+        document.body.dataset.phase = phase;
+      } else {
+        delete document.body.dataset.phase;
+      }
+      if (phase === "warning") {
+        startErrorCanvas();
+      } else {
+        stopErrorCanvas();
+      }
+    }
+
+    function setStatic(enabled) {
+      if (enabled) {
+        document.body.dataset.static = "true";
+      } else {
+        delete document.body.dataset.static;
+      }
+    }
+
+    function setArmed(enabled) {
+      if (enabled) {
+        document.body.dataset.armed = "true";
+      } else {
+        delete document.body.dataset.armed;
+      }
+    }
+
+    function resizeErrorCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = errorCanvas.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if (errorCanvas.width !== width || errorCanvas.height !== height) {
+        errorCanvas.width = width;
+        errorCanvas.height = height;
+        errorCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        seedErrorSparks(rect.width, rect.height);
+      }
+      return rect;
+    }
+
+    function seedErrorSparks(width, height) {
+      errorSparks = Array.from({ length: 120 }, (_, index) => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        lane: Math.random() > .52 ? 1 : -1,
+        speed: 22 + Math.random() * 94,
+        size: .6 + Math.random() * 2.4,
+        phase: Math.random() * Math.PI * 2,
+        warm: index % 3 !== 0
+      }));
+    }
+
+    function drawFaultLine(width, y, time, warm, intensity) {
+      errorCtx.beginPath();
+      const segments = 40;
+      for (let i = 0; i <= segments; i += 1) {
+        const x = (width / segments) * i;
+        const noise = Math.sin(i * 1.7 + time * (warm ? 4.2 : 3.6)) * 8;
+        const tremor = Math.sin(i * 4.9 + time * 8.5) * (warm ? 2.8 : 2.2);
+        const py = y + noise + tremor;
+        if (i === 0) errorCtx.moveTo(x, py);
+        else errorCtx.lineTo(x, py);
+      }
+      errorCtx.strokeStyle = warm ? `rgba(255,159,69,${.22 * intensity})` : `rgba(101,213,255,${.2 * intensity})`;
+      errorCtx.lineWidth = warm ? 2.1 : 1.35;
+      errorCtx.shadowColor = warm ? "rgba(255,159,69,.92)" : "rgba(101,213,255,.82)";
+      errorCtx.shadowBlur = warm ? 22 : 18;
+      errorCtx.stroke();
+    }
+
+    function drawErrorCanvasFrame(timestamp) {
+      if (!errorStartTime) errorStartTime = timestamp;
+      const rect = resizeErrorCanvas();
+      const width = rect.width;
+      const height = rect.height;
+      const time = (timestamp - errorStartTime) / 1000;
+      const staticMode = document.body.dataset.static === "true";
+      const intensity = staticMode ? 1.38 : 1;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      errorCtx.clearRect(0, 0, width, height);
+      errorCtx.globalCompositeOperation = "lighter";
+
+      const pulse = .58 + Math.sin(time * 2.2) * .18 + (staticMode ? Math.sin(time * 17) * .12 : 0);
+      const core = errorCtx.createRadialGradient(centerX, centerY, width * .08, centerX, centerY, width * .68);
+      core.addColorStop(0, `rgba(0,0,0,0)`);
+      core.addColorStop(.3, `rgba(14,95,150,${.08 * intensity})`);
+      core.addColorStop(.58, `rgba(255,159,69,${.055 * intensity * pulse})`);
+      core.addColorStop(1, `rgba(0,0,0,0)`);
+      errorCtx.fillStyle = core;
+      errorCtx.fillRect(0, 0, width, height);
+
+      for (let ring = 0; ring < 4; ring += 1) {
+        const radiusX = width * (.21 + ring * .075) + Math.sin(time * 1.4 + ring) * 8;
+        const radiusY = height * (.105 + ring * .038) + Math.cos(time * 1.2 + ring) * 5;
+        errorCtx.beginPath();
+        errorCtx.ellipse(centerX, centerY, radiusX, radiusY, Math.sin(time * .35) * .06, Math.PI * .04, Math.PI * 1.96);
+        errorCtx.strokeStyle = ring % 2 ? `rgba(101,213,255,${.075 * intensity})` : `rgba(255,159,69,${.09 * intensity})`;
+        errorCtx.lineWidth = 1;
+        errorCtx.shadowBlur = 14;
+        errorCtx.shadowColor = ring % 2 ? "rgba(101,213,255,.7)" : "rgba(255,159,69,.8)";
+        errorCtx.stroke();
+      }
+
+      drawFaultLine(width, centerY - height * .24, time, true, intensity);
+      drawFaultLine(width, centerY - height * .235, time + .42, false, intensity);
+      drawFaultLine(width, centerY + height * .24, time + 1.1, true, intensity);
+      drawFaultLine(width, centerY + height * .235, time + .68, false, intensity);
+
+      const sweepY = ((time * (staticMode ? .54 : .32)) % 1) * height;
+      const sweep = errorCtx.createLinearGradient(0, sweepY - 42, 0, sweepY + 42);
+      sweep.addColorStop(0, "rgba(101,213,255,0)");
+      sweep.addColorStop(.46, `rgba(101,213,255,${.18 * intensity})`);
+      sweep.addColorStop(.52, `rgba(255,159,69,${.16 * intensity})`);
+      sweep.addColorStop(1, "rgba(255,159,69,0)");
+      errorCtx.fillStyle = sweep;
+      errorCtx.fillRect(0, sweepY - 42, width, 84);
+
+      for (const spark of errorSparks) {
+        const edgeBias = Math.abs(spark.x / width - .5);
+        const drift = (time * spark.speed * spark.lane + spark.phase * 80) % height;
+        const y = (spark.y + drift + height) % height;
+        const alpha = (.16 + edgeBias * .42) * intensity * (staticMode ? 1.08 : .88);
+        const length = spark.size * (staticMode ? 18 : 11);
+        errorCtx.strokeStyle = spark.warm ? `rgba(255,159,69,${alpha})` : `rgba(101,213,255,${alpha})`;
+        errorCtx.lineWidth = spark.size;
+        errorCtx.shadowBlur = spark.warm ? 12 : 10;
+        errorCtx.shadowColor = spark.warm ? "rgba(255,159,69,.86)" : "rgba(101,213,255,.82)";
+        errorCtx.beginPath();
+        errorCtx.moveTo(spark.x + Math.sin(time * 2 + spark.phase) * 5, y);
+        errorCtx.lineTo(spark.x + Math.sin(time * 2 + spark.phase) * 5, y + length);
+        errorCtx.stroke();
+      }
+
+      if (staticMode) {
+        for (let i = 0; i < 12; i += 1) {
+          const y = (Math.sin(time * 16 + i * 2.17) * .5 + .5) * height;
+          const x = (Math.sin(time * 9 + i * 1.6) * .5 + .5) * width;
+          errorCtx.fillStyle = i % 2 ? "rgba(101,213,255,.17)" : "rgba(255,159,69,.18)";
+          errorCtx.shadowBlur = 20;
+          errorCtx.fillRect(x - width * .18, y, width * (.16 + (i % 4) * .04), 2);
+        }
+      }
+
+      errorCtx.globalCompositeOperation = "source-over";
+      errorFrame = requestAnimationFrame(drawErrorCanvasFrame);
+    }
+
+    function startErrorCanvas() {
+      if (errorFrame) return;
+      errorStartTime = 0;
+      resizeErrorCanvas();
+      errorFrame = requestAnimationFrame(drawErrorCanvasFrame);
+    }
+
+    function stopErrorCanvas() {
+      if (errorFrame) {
+        cancelAnimationFrame(errorFrame);
+        errorFrame = 0;
+      }
+      errorStartTime = 0;
+      errorCtx.clearRect(0, 0, errorCanvas.width, errorCanvas.height);
+    }
+
+    function schedule(callback, delay) {
+      const timer = setTimeout(callback, delay);
+      sequenceTimers.push(timer);
+      return timer;
+    }
+
+    function wait(delay, runId) {
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(activeRun === runId), delay);
+        sequenceTimers.push(timer);
+      });
+    }
+
+    function safeVolume(value) {
+      return Math.max(0, Math.min(1, value));
+    }
+
+    function beep(at, freq, duration, gain = 0.08, type = "square", destination = null) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const amp = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, at);
+      amp.gain.setValueAtTime(0.0001, at);
+      amp.gain.exponentialRampToValueAtTime(gain, at + 0.018);
+      amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      osc.connect(amp);
+      amp.connect(destination || audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + duration + 0.02);
+    }
+
+    function makeNoiseBuffer(duration, amplitude = 1) {
+      const sampleRate = audioCtx.sampleRate;
+      const buffer = audioCtx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * amplitude;
+      }
+      return buffer;
+    }
+
+    function playScannerZoomSound() {
+      if (!audioCtx || !soundReady) return;
+      const now = audioCtx.currentTime;
+      const source = audioCtx.createBufferSource();
+      source.buffer = makeNoiseBuffer(2.8, .65);
+      const filter = audioCtx.createBiquadFilter();
+      const gain = audioCtx.createGain();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(220, now);
+      filter.frequency.exponentialRampToValueAtTime(3600, now + 1.05);
+      filter.frequency.exponentialRampToValueAtTime(520, now + 2.65);
+      filter.Q.value = 1.8;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(MIX.scannerNoise, now + .08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.75);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      source.start(now);
+      source.stop(now + 2.85);
+
+      const servo = audioCtx.createOscillator();
+      const servoGain = audioCtx.createGain();
+      servo.type = "triangle";
+      servo.frequency.setValueAtTime(92, now);
+      servo.frequency.exponentialRampToValueAtTime(285, now + 1.35);
+      servo.frequency.exponentialRampToValueAtTime(155, now + 2.55);
+      servoGain.gain.setValueAtTime(0.0001, now);
+      servoGain.gain.exponentialRampToValueAtTime(MIX.scannerServo, now + .08);
+      servoGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.7);
+      servo.connect(servoGain);
+      servoGain.connect(audioCtx.destination);
+      servo.start(now);
+      servo.stop(now + 2.8);
+
+      const impact = now + 3.45;
+      beep(impact, 84, .22, MIX.stampThump, "sine");
+      beep(impact + .03, 1640, .08, MIX.stampPing, "triangle");
+      beep(impact + .12, 2360, .06, MIX.stampPing * .72, "triangle");
+    }
+
+    function playElectricCrackle(duration = 1) {
+      if (!audioCtx || !soundReady) return;
+      const now = audioCtx.currentTime;
+      const source = audioCtx.createBufferSource();
+      source.buffer = makeNoiseBuffer(duration, .22);
+      const highpass = audioCtx.createBiquadFilter();
+      const noiseGain = audioCtx.createGain();
+      highpass.type = "highpass";
+      highpass.frequency.value = 2400;
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(MIX.crackleNoise, now + .05);
+      noiseGain.gain.exponentialRampToValueAtTime(MIX.crackleNoise * .34, now + duration * .72);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      source.connect(highpass);
+      highpass.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+      source.start(now);
+      source.stop(now + duration + .02);
+
+      for (let t = 0.06; t < duration - .08; t += 0.075 + Math.random() * .16) {
+        const at = now + t;
+        const length = 0.025 + Math.random() * .06;
+        const freq = 900 + Math.random() * 3400;
+        const osc = audioCtx.createOscillator();
+        const amp = audioCtx.createGain();
+        osc.type = Math.random() > .5 ? "square" : "sawtooth";
+        osc.frequency.setValueAtTime(freq, at);
+        osc.frequency.exponentialRampToValueAtTime(freq * (1.35 + Math.random() * 1.7), at + length);
+        amp.gain.setValueAtTime(0.0001, at);
+        amp.gain.exponentialRampToValueAtTime(MIX.crackleSpark + Math.random() * MIX.crackleSparkRange, at + .006);
+        amp.gain.exponentialRampToValueAtTime(0.0001, at + length);
+        osc.connect(amp);
+        amp.connect(audioCtx.destination);
+        osc.start(at);
+        osc.stop(at + length + .01);
+      }
+    }
+
+    function playFallbackAlarm(duration = 4.85, gain = MIX.fallbackAlarm) {
+      if (!audioCtx || !soundReady) return;
+      const now = audioCtx.currentTime;
+      for (let t = 0; t < duration; t += .7) {
+        beep(now + t, 620, .18, gain, "sawtooth");
+        beep(now + t + .18, 410, .18, gain * .82, "sawtooth");
+      }
+    }
+
+    function playUnlockTone() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      beep(now, 720, .07, MIX.unlockTone, "sine");
+      beep(now + .08, 1080, .06, MIX.unlockTone * .68, "triangle");
+    }
+
+    async function primeMedia(audio) {
+      const originalVolume = audio.volume;
+      const originalMuted = audio.muted;
+      let played = false;
+      try {
+        audio.load();
+        audio.muted = false;
+        audio.volume = 0.001;
+        await audio.play();
+        played = true;
+        await new Promise((resolve) => setTimeout(resolve, 70));
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (error) {
+        console.warn("Audio prime failed", audio.id, error && (error.name || error.message || error));
+        audio.pause();
+        try { audio.currentTime = 0; } catch (_) {}
+      } finally {
+        audio.volume = originalVolume;
+        audio.muted = originalMuted;
+      }
+      return played;
+    }
+
+    function pauseMedia(audio) {
+      audio.pause();
+      try { audio.currentTime = 0; } catch (_) {}
+    }
+
+    function playMedia(audio, volume, runId, fallbackMs, fallback = null) {
+      if (!soundReady) {
+        if (fallback) fallback();
+        return wait(fallbackMs, runId);
+      }
+      return new Promise(async (resolve) => {
+        let resolved = false;
+        const finish = (ok = activeRun === runId) => {
+          if (resolved) return;
+          resolved = true;
+          audio.onended = null;
+          audio.onerror = null;
+          resolve(ok);
+        };
+        const finishActiveRun = () => finish(activeRun === runId);
+        const finishByTimeout = () => {
+          if (activeRun === runId) {
+            audio.pause();
+            try { audio.currentTime = 0; } catch (_) {}
+          }
+          finishActiveRun();
+        };
+        try {
+          audio.pause();
+          try { audio.currentTime = 0; } catch (_) {}
+          audio.volume = safeVolume(volume);
+          audio.onended = finishActiveRun;
+          audio.onerror = finishActiveRun;
+          await audio.play();
+          schedule(finishByTimeout, fallbackMs + 140);
+        } catch (error) {
+          console.warn("Audio play failed", audio.id, error && (error.name || error.message || error));
+          if (fallback) fallback();
+          const ok = await wait(fallbackMs, runId);
+          finish(ok);
+        }
+      });
+    }
+
+    async function playWarningAudioSequence(runId) {
+      if (!soundReady) {
+        if (!await wait(warningStaticDelay, runId)) return false;
+        setStatic(true);
+        if (!await wait(electricGlitchDuration, runId)) return false;
+        setStatic(false);
+        return true;
+      }
+      const alarmDone = playMedia(alarmAudio, MIX.alarm, runId, alarmDuration, () => playFallbackAlarm(alarmDuration / 1000));
+      const errorVoiceDone = playMedia(errorVoiceAudio, MIX.errorVoice, runId, errorVoiceDuration);
+      if (!await wait(warningStaticDelay, runId)) return false;
+      setStatic(true);
+      const glitchDone = playMedia(electricGlitchAudio, MIX.electricGlitch, runId, electricGlitchDuration, () => playElectricCrackle(electricGlitchDuration / 1000));
+      const [alarmOk, errorVoiceOk, glitchOk] = await Promise.all([alarmDone, errorVoiceDone, glitchDone]);
+      setStatic(false);
+      return alarmOk && errorVoiceOk && glitchOk;
+    }
+
+    async function startDeviceAmbience() {
+      if (!soundReady) return () => {};
+      deviceAudio.pause();
+      deviceAudio.currentTime = 0;
+      deviceAudio.volume = MIX.deviceAmbience;
+      try {
+        await deviceAudio.play();
+      } catch (_) {
+        return () => {};
+      }
+      return () => {
+        deviceAudio.pause();
+        deviceAudio.currentTime = 0;
+      };
+    }
+
+    async function unlockSound() {
+      let contextReady = false;
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        await audioCtx.resume();
+        contextReady = audioCtx.state === "running";
+        playUnlockTone();
+      } catch (error) {
+        console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
+      }
+      const mediaReady = (await Promise.all(mediaElements.map(primeMedia))).some(Boolean);
+      soundReady = contextReady || mediaReady;
+      return soundReady;
+    }
+
+    async function playSignalAudio(runId) {
+      if (!soundReady) {
+        return wait(skipBlackboxDuration, runId);
+      }
+      return new Promise(async (resolve) => {
+        let resolved = false;
+        let stopAmbience = () => {};
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          stopAmbience();
+          resolve(activeRun === runId);
+        };
+        try {
+          signalAudio.currentTime = 0;
+          signalAudio.volume = MIX.blackboxVoice;
+          signalAudio.onended = finish;
+          stopAmbience = await startDeviceAmbience();
+          await signalAudio.play();
+          schedule(finish, blackboxAudioDuration + 500);
+        } catch (_) {
+          stopAmbience();
+          soundReady = false;
+          const ok = await wait(skipBlackboxDuration, runId);
+          resolve(ok);
+        }
+      });
+    }
+
+    async function playFailureSequence(runId) {
+      if (activeRun !== runId) return;
+
+      setPhase("warning");
+      if (!await playWarningAudioSequence(runId)) return;
+
+      setStatic(false);
+      setPhase("blackout");
+      if (!await playSignalAudio(runId)) return;
+
+      setStatic(false);
+      jumpToDownload();
+    }
+
+    function jumpToDownload() {
+      if (jumped) {
+        return;
+      }
+      jumped = true;
+      setStatic(false);
+      window.location.href = "download-placeholder.html";
+    }
+
+    function showAudioChoice() {
+      setStatic(false);
+      setPhase("audio-choice");
+    }
+
+    async function startStampSequence(enableAudio) {
+      clearSequenceTimers();
+      activeRun += 1;
+      const runId = activeRun;
+      setPhase("");
+      setStatic(false);
+      setArmed(false);
+      jumped = false;
+      mediaElements.forEach(pauseMedia);
+      soundReady = false;
+
+      if (enableAudio) await unlockSound();
+      if (activeRun !== runId) return;
+
+      setArmed(true);
+      playScannerZoomSound();
+      if (!await wait(stampDuration, runId)) return;
+      playFailureSequence(runId);
+    }
+
+    audioButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        startStampSequence(button.dataset.audioChoice === "enable");
+      });
+    });
+    window.addEventListener("resize", resizeErrorCanvas);
+
+    if (params.get("autostart") === "skip") {
+      requestAnimationFrame(() => startStampSequence(false));
+    } else {
+      showAudioChoice();
+    }
+  </script>
+</body>
+</html>

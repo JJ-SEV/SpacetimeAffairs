@@ -37,6 +37,7 @@ DB_PATH = DATA_DIR / "flight_record.sqlite3"
 ADMIN_SECRET_PATH = DATA_DIR / "admin_secret.txt"
 ADMIN_PASSWORD_PATH = DATA_DIR / "admin_password.txt"
 AMAP_KEY_PATH = DATA_DIR / "amap_key.txt"
+STAMP_ANIMATION_TEMPLATE_PATH = APP_ROOT / "static" / "stamp-animation" / "index.html"
 ADMIN_COOKIE = "flight_record_admin"
 PLAYER_COOKIE = "flight_record_player"
 _ADMIN_SECRET_CACHE: str | None = None
@@ -1028,7 +1029,7 @@ def flight_confirm_page(submission_id: str) -> bytes:
     return layout("飞行纪录预览", body, body_class="home-body")
 
 
-def flight_loading_page(submission_id: str) -> bytes:
+def flight_loading_fallback_page(submission_id: str) -> bytes:
     redirect_to = f"/record?id={esc(submission_id)}"
     body = f"""
 <main class="auth-shell loading-shell">
@@ -1061,6 +1062,40 @@ def flight_loading_page(submission_id: str) -> bytes:
 </script>
 """
     return auth_layout("生成飞行纪录", body)
+
+
+def flight_loading_page(submission_id: str) -> bytes:
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None or not row["png_filename"]:
+        return destination_page("没找到这个飞行纪录。")
+    if not STAMP_ANIMATION_TEMPLATE_PATH.exists():
+        return flight_loading_fallback_page(submission_id)
+    redirect_to = f"/record?id={esc(row['id'])}"
+    preview_token = quote(str(row["generated_at"] or row["id"]))
+    record_src = f"/preview?id={esc(row['id'])}&v={preview_token}"
+    page = STAMP_ANIMATION_TEMPLATE_PATH.read_text(encoding="utf-8")
+    page = page.replace(
+        '<title>Flight Record Scanner Seal Preview</title>',
+        "<title>生成飞行纪录</title>",
+    )
+    page = page.replace(
+        'src="assets/flight-record-default-unstamped.png"',
+        f'src="{record_src}"',
+    )
+    page = page.replace('src="assets/', 'src="/static/stamp-animation/assets/')
+    page = page.replace(
+        'window.location.href = "download-placeholder.html";',
+        f'window.location.href = "{redirect_to}";',
+    )
+    page = page.replace(
+        """    if (params.get("autostart") === "skip") {
+      requestAnimationFrame(() => startStampSequence(false));
+    } else {
+      showAudioChoice();
+    }""",
+        "    requestAnimationFrame(() => startStampSequence(false));",
+    )
+    return page.encode("utf-8")
 
 
 def record_preview_page(submission_id: str) -> bytes:
