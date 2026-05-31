@@ -3442,7 +3442,6 @@
       if (params.get("prepared") === "1") {
         setStartupChecklistComplete();
         setGateContent("飞行纪录已装载", "正在校验飞行纪录图与签发模组", "Loading", false);
-        showAudioChoice();
         let imagesOk = await Promise.race([imagesReady, sleep(signingImageTimeout).then(() => false)]);
         if (!imagesOk) {
           setGateContent("飞行纪录已装载", "正在重新拉取飞行纪录图与签发模组", "Retrying", false);
@@ -3450,9 +3449,11 @@
         }
         if (!imagesOk) {
           setGateContent("模组启动失败", "网络不稳定，请重新部署", "Retry", true);
+          showAudioChoice();
           return;
         }
         setGateContent("飞行纪录已装载", "点击确认部署启动签发", "Ready", true);
+        showAudioChoice();
         assetsReady.catch(() => {});
         return;
       }

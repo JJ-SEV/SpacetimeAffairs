@@ -56,7 +56,7 @@ LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 RECORD_JPG_VERSION = "jpg-v1"
-STATIC_CSS_VERSION = "20260531-destination-copy"
+STATIC_CSS_VERSION = "20260531-sign-prep-gated"
 CRITICAL_LAYOUT_CSS = """
 :root{--ink:#eff7f4;--panel:rgba(9,17,25,.78);--line:rgba(133,181,202,.34);--muted:#9eb2b5;--accent:#ff7b35;--gold:#e7b45c;--cyan:#67c7ef;--green:#80e3bc;--wash:#071018}
 *{box-sizing:border-box}
@@ -1379,6 +1379,7 @@ def flight_loading_page(submission_id: str) -> bytes:
   let signMarkup = "";
   const preparedImageUrls = new Map();
   let etaDeadline = null;
+  let etaProgressAnchor = 0;
   let visiblePhase = 0;
   let preparingToEnter = false;
   const startedAt = performance.now();
@@ -1411,22 +1412,26 @@ def flight_loading_page(submission_id: str) -> bytes:
       return;
     }}
     const now = performance.now();
-    const elapsedSeconds = Math.max(.8, (now - startedAt) / 1000);
-    const bufferSeconds = progress < .55 ? 10 : progress < .85 ? 7 : 5;
-    const estimatedSeconds = Math.ceil((elapsedSeconds / progress) * (1 - progress)) + bufferSeconds;
-    if (!Number.isFinite(estimatedSeconds)) {{
+    const estimatedSeconds = Math.ceil((1 - progress) * (visiblePhase === 0 ? 18 : 26)) + (visiblePhase === 0 ? 4 : 6);
+    if (!Number.isFinite(estimatedSeconds) || estimatedSeconds <= 0) {{
       eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
       return;
     }}
     if (etaDeadline === null) {{
       const secondsLeft = Math.min(120, Math.max(6, estimatedSeconds));
       etaDeadline = now + secondsLeft * 1000;
+      etaProgressAnchor = progress;
+    }} else if (progress > etaProgressAnchor + .05) {{
+      const currentSeconds = Math.max(2, Math.ceil((etaDeadline - now) / 1000));
+      const adjustedSeconds = Math.max(2, Math.min(currentSeconds, estimatedSeconds));
+      etaDeadline = now + adjustedSeconds * 1000;
+      etaProgressAnchor = progress;
+    }} else if (etaDeadline - now < 1500) {{
+      const extensionSeconds = Math.min(30, Math.max(5, estimatedSeconds));
+      etaDeadline = now + extensionSeconds * 1000;
+      etaProgressAnchor = progress;
     }}
-    const secondsLeft = Math.ceil((etaDeadline - now) / 1000);
-    if (secondsLeft <= 0) {{
-      eta.textContent = "系统加载仍在进行，请保持当前页面";
-      return;
-    }}
+    const secondsLeft = Math.max(1, Math.ceil((etaDeadline - now) / 1000));
     eta.textContent = "系统加载中，预计部署完成时间还有：" + secondsLeft + " 秒";
   }}
 
@@ -1573,16 +1578,8 @@ def flight_loading_page(submission_id: str) -> bytes:
           progress(Math.max(.02, value * .86));
         }});
         progress(.9);
-        const objectUrl = URL.createObjectURL(blob);
-        try {{
-          await decodeImage(objectUrl);
-        }} catch (error) {{
-          URL.revokeObjectURL(objectUrl);
-          throw error;
-        }}
-        const previousUrl = preparedImageUrls.get(src);
-        if (previousUrl) URL.revokeObjectURL(previousUrl);
-        preparedImageUrls.set(src, objectUrl);
+        await decodeImage(target);
+        preparedImageUrls.set(src, target);
         progress(1);
         return;
       }} catch (error) {{
@@ -1600,18 +1597,8 @@ def flight_loading_page(submission_id: str) -> bytes:
 
   function runTrackedTask(asset, phase, index) {{
     updateTaskProgress(phase, index, .01);
-    return withTimeout(asset.run((value) => updateTaskProgress(phase, index, value)), 22000)
+    return withTimeout(asset.run((value) => updateTaskProgress(phase, index, value)), 90000)
       .then(() => updateTaskProgress(phase, index, 1));
-  }}
-
-  function runTrackedTaskSettled(asset, phase, index) {{
-    return runTrackedTask(asset, phase, index)
-      .then(() => true)
-      .catch((error) => {{
-        console.warn("Prep asset skipped", error && (error.name || error.message || error));
-        updateTaskProgress(phase, index, 1);
-        return false;
-      }});
   }}
 
   function warmAudioAssets() {{
@@ -1626,8 +1613,8 @@ def flight_loading_page(submission_id: str) -> bytes:
     if (signMarkup.trim()) {{
       try {{
         let preparedMarkup = signMarkup;
-        preparedImageUrls.forEach((objectUrl, src) => {{
-          preparedMarkup = replaceAllText(preparedMarkup, src, objectUrl);
+        preparedImageUrls.forEach((preparedSrc, src) => {{
+          preparedMarkup = replaceAllText(preparedMarkup, src, preparedSrc);
         }});
         history.replaceState(null, "", signUrl);
         document.open();
@@ -1644,12 +1631,11 @@ def flight_loading_page(submission_id: str) -> bytes:
   async function run() {{
     const etaTimer = setInterval(updateEta, 1000);
     const routeAssets = [
-      {{run: (progress) => preloadJson(prepareUrl, progress)}},
-      {{run: (progress) => preloadText(signUrl, progress)}},
-      {{run: (progress) => preloadImage(imageAssets[0], progress)}}
+      {{run: (progress) => preloadJson(prepareUrl, progress)}}
     ];
     const buildAssets = [
-      ...imageAssets.slice(1).map((src) => ({{run: (progress) => preloadImage(src, progress)}}))
+      {{run: (progress) => preloadText(signUrl, progress)}},
+      ...imageAssets.map((src) => ({{run: (progress) => preloadImage(src, progress)}}))
     ];
     progressBuckets[0] = new Array(routeAssets.length).fill(0);
     progressBuckets[1] = new Array(buildAssets.length).fill(0);
@@ -1657,31 +1643,35 @@ def flight_loading_page(submission_id: str) -> bytes:
     setStepProgress(1, 0);
     warmAudioAssets();
 
-    const routeStartedAt = performance.now();
-    const routeReady = Promise.all(routeAssets.map((asset, index) => runTrackedTaskSettled(asset, 0, index)));
-    const buildReady = Promise.all(buildAssets.map((asset, index) => runTrackedTaskSettled(asset, 1, index)));
-    await Promise.race([routeReady, sleep(6500)]);
-    if (performance.now() - routeStartedAt < 700) {{
-      await sleep(700 - (performance.now() - routeStartedAt));
+    try {{
+      const routeStartedAt = performance.now();
+      await Promise.all(routeAssets.map((asset, index) => runTrackedTask(asset, 0, index)));
+      if (performance.now() - routeStartedAt < 700) {{
+        await sleep(700 - (performance.now() - routeStartedAt));
+      }}
+      setStepProgress(0, 1);
+      visiblePhase = 1;
+      etaDeadline = null;
+      etaProgressAnchor = .5;
+      updateEta();
+      const buildStartedAt = performance.now();
+      setStepProgress(1, Math.min(phaseProgress(1), .04));
+      await sleep(120);
+      await Promise.all(buildAssets.map((asset, index) => runTrackedTask(asset, 1, index)));
+      if (performance.now() - buildStartedAt < 900) {{
+        await sleep(900 - (performance.now() - buildStartedAt));
+      }}
+      setStepProgress(1, 1);
+      preparingToEnter = true;
+      clearInterval(etaTimer);
+      updateEta();
+      await sleep(260);
+      enterSignPage();
+    }} catch (error) {{
+      console.warn("Prep failed", error && (error.name || error.message || error));
+      clearInterval(etaTimer);
+      showPrepFailure();
     }}
-    setStepProgress(0, 1);
-    visiblePhase = 1;
-    etaDeadline = null;
-    updateEta();
-    const buildStartedAt = performance.now();
-    setStepProgress(1, Math.min(phaseProgress(1), .08));
-    await sleep(120);
-    setStepProgress(1, phaseProgress(1));
-    await Promise.race([buildReady, sleep(8500)]);
-    if (performance.now() - buildStartedAt < 900) {{
-      await sleep(900 - (performance.now() - buildStartedAt));
-    }}
-    setStepProgress(1, 1);
-    preparingToEnter = true;
-    clearInterval(etaTimer);
-    updateEta();
-    await sleep(260);
-    enterSignPage();
   }}
 
   run();
