@@ -4,7 +4,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import parse_qs, quote, urlparse
 import cgi
 import hashlib
@@ -50,6 +50,7 @@ DOWNLOAD_UNLOCK_TZ = ZoneInfo("Asia/Shanghai")
 DOWNLOAD_UNLOCK_AT = datetime(2026, 6, 13, 0, 0, 0, tzinfo=DOWNLOAD_UNLOCK_TZ)
 DOWNLOAD_UNLOCK_ISO = DOWNLOAD_UNLOCK_AT.isoformat()
 DOWNLOAD_UNLOCK_LABEL = "2026-06-13 00:00 中国北京时间"
+MIN_PLAYER_AGE = 18
 LOCKED_PREVIEW_MAX_DIMENSION = 1400
 LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
@@ -124,6 +125,28 @@ def shanghai_now() -> datetime:
 
 def downloads_unlocked(now: datetime | None = None) -> bool:
     return (now or shanghai_now()) >= DOWNLOAD_UNLOCK_AT
+
+
+def adult_birthdate_cutoff(today: date | None = None) -> date:
+    today = today or shanghai_now().date()
+    try:
+        return today.replace(year=today.year - MIN_PLAYER_AGE)
+    except ValueError:
+        return today.replace(year=today.year - MIN_PLAYER_AGE, day=28)
+
+
+def parse_birthday_password(password: str) -> date | None:
+    if len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
+        return None
+    try:
+        return date(int(password[:4]), int(password[4:6]), int(password[6:8]))
+    except ValueError:
+        return None
+
+
+def birthday_password_is_adult(password: str, today: date | None = None) -> bool:
+    birthdate = parse_birthday_password(password)
+    return bool(birthdate and birthdate <= adult_birthdate_cutoff(today))
 
 
 def ensure_db() -> None:
@@ -1928,6 +1951,7 @@ def help_page() -> bytes:
 def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> bytes:
     notice = f'<div class="auth-alert">{esc(message)}</div>' if message else ""
     password_hint_attempt_js = "true" if password_hint_attempt else "false"
+    adult_cutoff = adult_birthdate_cutoff().isoformat()
     body = f"""
 <main class="auth-shell">
   <a class="auth-help" href="/help">帮助</a>
@@ -1948,6 +1972,7 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
         </label>
         <label>密码
           <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="current-password" required>
+          <span class="pilot-id-hint password-age-hint" aria-live="polite"></span>
         </label>
         <div class="digit-rack" aria-hidden="true">
           <span></span><span></span><span></span><span></span>
@@ -1978,7 +2003,9 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     const cells = Array.from(document.querySelectorAll(".digit-rack span"));
     const state = document.querySelector(".auth-state");
     const pilotHint = document.querySelector(".pilot-id-hint");
+    const passwordAgeHint = document.querySelector(".password-age-hint");
     const validPilots = new Set(["CALEB", "XIAYIZHOU"]);
+    const adultBirthdateCutoff = "{adult_cutoff}";
     const passwordHintAttempt = {password_hint_attempt_js};
     const passwordFailKey = "flightGatePasswordFailCount";
     const passwordHintModal = document.querySelector("[data-password-hint-modal]");
@@ -2032,6 +2059,27 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     }}
     return {{ clean, rejected }};
   }}
+  function birthdayStatus(value) {{
+    if (!/^(19|20)\\d{{6}}$/.test(value)) {{
+      return {{ valid: false, adult: false, message: "密码为8位生日数字。" }};
+    }}
+    const year = Number(value.slice(0, 4));
+    const month = Number(value.slice(4, 6));
+    const day = Number(value.slice(6, 8));
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    const valid =
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day;
+    if (!valid) {{
+      return {{ valid: false, adult: false, message: "生日日期无效。" }};
+    }}
+    const birthIso = `${{value.slice(0, 4)}}-${{value.slice(4, 6)}}-${{value.slice(6, 8)}}`;
+    if (birthIso > adultBirthdateCutoff) {{
+      return {{ valid: true, adult: false, message: "未满18周岁无法登录。" }};
+    }}
+    return {{ valid: true, adult: true, message: "" }};
+  }}
     function syncCode(showError = true) {{
       const result = birthdayDigits(codeInput.value);
       const clean = result.clean;
@@ -2042,6 +2090,15 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       cell.classList.toggle("filled", index < clean.length);
     }});
     state.textContent = clean.length === 8 ? "CLEARANCE READY" : `SYNC ${{clean.length}}/8`;
+    const status = clean.length === 8 ? birthdayStatus(clean) : {{ valid: true, adult: true, message: "" }};
+    const codeInvalid = clean.length === 8 && (!status.valid || !status.adult);
+    codeInput.setCustomValidity(codeInvalid ? status.message : "");
+    codeInput.classList.toggle("invalid", codeInvalid);
+    if (passwordAgeHint) passwordAgeHint.textContent = codeInvalid ? status.message : "";
+    if (codeInvalid && showError) {{
+      flashInvalid();
+      return;
+    }}
     if (result.rejected && showError) {{
       recordPasswordFailure(true);
       flashInvalid();
@@ -2122,6 +2179,11 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
         return;
       }}
       syncCode(false);
+      if (!codeInput.checkValidity()) {{
+        event.preventDefault();
+        flashInvalid();
+        codeInput.focus();
+      }}
     }});
     syncPilot(false);
     syncCode();
@@ -2996,8 +3058,12 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if pilot_id not in VALID_PILOT_IDS:
                 self.send_html(player_gate_page("Pilot ID不存在。"), 403)
                 return
-            if len(password) != 8 or not password.isdigit() or not password.startswith(("19", "20")):
-                self.send_html(player_gate_page("密码不正确，密码为8位数字。", password_hint_attempt=True), 403)
+            birthdate = parse_birthday_password(password)
+            if birthdate is None:
+                self.send_html(player_gate_page("密码不正确，密码为8位生日数字。", password_hint_attempt=True), 403)
+                return
+            if birthdate > adult_birthdate_cutoff():
+                self.send_html(player_gate_page("未满18周岁无法登录。"), 403)
                 return
             self.redirect(
                 "/",
