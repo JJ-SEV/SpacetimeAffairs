@@ -56,7 +56,7 @@ LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 RECORD_JPG_VERSION = "jpg-v1"
-STATIC_CSS_VERSION = "20260531-critical-fallback"
+STATIC_CSS_VERSION = "20260531-destination-copy"
 CRITICAL_LAYOUT_CSS = """
 :root{--ink:#eff7f4;--panel:rgba(9,17,25,.78);--line:rgba(133,181,202,.34);--muted:#9eb2b5;--accent:#ff7b35;--gold:#e7b45c;--cyan:#67c7ef;--green:#80e3bc;--wash:#071018}
 *{box-sizing:border-box}
@@ -1215,8 +1215,9 @@ def destination_page(message: str = "") -> bytes:
     <span></span>
   </div>
   <div class="mission-copy">
-    <p class="eyebrow">TARGET CLEARANCE</p>
-    <h2>规划飞行航道</h2>
+    <p class="eyebrow">SPACETIME AUTHORITY</p>
+    <h2>欢迎 执舰官-夏以昼</h2>
+    <p class="mission-brief">登录时空管理局系统，请输入你要寻找的目标，确认目的地。</p>
   </div>
   <div class="signal-grid destination-signal-grid" aria-hidden="true">
     <div><b>TARGET</b><span>INPUT</span></div>
@@ -1229,7 +1230,7 @@ def destination_page(message: str = "") -> bytes:
 <form class="panel wide destination-form" action="/flight/create" method="post">
   <div class="section-head">
     <span>01</span>
-    <h2>输入目标和目的地</h2>
+    <h2>输入目标，确认目的地</h2>
   </div>
   <label>目标
     <input name="destination_name" maxlength="24" placeholder="输入目标姓名" inputmode="text" lang="zh-CN" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
@@ -1249,7 +1250,7 @@ def destination_page(message: str = "") -> bytes:
 {mobile_archive}
 {address_picker_script()}
 """
-    return layout("规划飞行航道", body, body_class="home-body")
+    return layout("时空管理局系统", body, body_class="home-body")
 
 
 def flight_confirm_page(submission_id: str) -> bytes:

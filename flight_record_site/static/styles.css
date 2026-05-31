@@ -1512,6 +1512,15 @@ input[type="file"] {
   font-size: 32px;
 }
 
+.mission-brief {
+  max-width: 620px;
+  margin: 10px 0 0;
+  color: rgba(213, 228, 229, 0.78);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
 .radar-scope {
   position: relative;
   overflow: hidden;
@@ -2146,6 +2155,12 @@ dd {
   .destination-command .mission-copy h2 {
     font-size: 24px;
     line-height: 1.15;
+  }
+
+  .destination-command .mission-brief {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.55;
   }
 
   .destination-signal-grid {
