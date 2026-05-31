@@ -2066,8 +2066,8 @@
       <p data-gate-copy>正在载入飞行纪录图与扫描模组</p>
       <span class="audio-status" data-gate-status>Loading record</span>
       <div class="audio-actions">
-        <button type="button" data-audio-choice="enable" disabled>启动签发</button>
-        <button type="button" data-audio-choice="skip" disabled>静音启动</button>
+        <button type="button" data-audio-choice="enable" disabled>确认部署</button>
+        <button type="button" data-audio-choice="skip" disabled>静音部署</button>
       </div>
     </section>
   </div>
@@ -3171,9 +3171,9 @@
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (params.get("prepared") === "1") {
         setStartupChecklistComplete();
-        await assetsReady;
-        setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
+        setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
         showAudioChoice();
+        assetsReady.catch(() => {});
         return;
       }
       const checklist = runStartupChecklist();
@@ -3185,7 +3185,7 @@
       }
       await checklist;
       await Promise.race([assetsReady, sleep(startupAssetTimeout)]);
-      setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
+      setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
       showAudioChoice();
     }
 

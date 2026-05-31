@@ -1279,11 +1279,11 @@ def flight_loading_page(submission_id: str) -> bytes:
     <h1>签发飞行纪录</h1>
     <div class="flight-sign-prep-steps" data-flight-prep-steps>
       <span data-prep-step>
-        <b>01 / ROUTE LOCK</b>
+        <b><span>01 / ROUTE LOCK</span><small data-prep-percent>0%</small></b>
         <i><em></em></i>
       </span>
       <span data-prep-step>
-        <b>02 / RECORD BUILD</b>
+        <b><span>02 / RECORD BUILD</span><small data-prep-percent>0%</small></b>
         <i><em></em></i>
       </span>
     </div>
@@ -1299,96 +1299,192 @@ def flight_loading_page(submission_id: str) -> bytes:
   const audioAssets = {json.dumps(sign_audio_assets, ensure_ascii=False)};
   const steps = Array.from(document.querySelectorAll("[data-prep-step]"));
   const status = document.querySelector("[data-prep-status]");
+  const stepState = steps.map((step) => ({{
+    step,
+    bar: step.querySelector("em"),
+    percent: step.querySelector("[data-prep-percent]")
+  }}));
+  const progressBuckets = [[], []];
+  let signMarkup = "";
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const prepare = fetch(prepareUrl, {{
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: {{"Accept": "application/json"}}
-  }}).then((response) => {{
-    if (!response.ok) throw new Error("prepare failed");
-    return response.json();
-  }}).catch(() => null);
 
-  function preloadImage(src) {{
+  function clamp(value, min = 0, max = 1) {{
+    return Math.min(max, Math.max(min, value));
+  }}
+
+  function phaseProgress(index) {{
+    const bucket = progressBuckets[index] || [];
+    if (!bucket.length) return 0;
+    return bucket.reduce((sum, value) => sum + (value || 0), 0) / bucket.length;
+  }}
+
+  function updateStatus() {{
+    if (!status) return;
+    const overall = Math.round(((phaseProgress(0) + phaseProgress(1)) / 2) * 100);
+    if (overall < 45) {{
+      status.textContent = "正在锁定任务目标与返航航道 " + overall + "%";
+    }} else if (overall < 100) {{
+      status.textContent = "正在写入任务目标、坐标与飞行日志 " + overall + "%";
+    }} else {{
+      status.textContent = "飞行纪录已装载，正在进入签发页面";
+    }}
+  }}
+
+  function setStepProgress(index, value) {{
+    const state = stepState[index];
+    if (!state) return;
+    const progress = clamp(value);
+    const percent = Math.round(progress * 100);
+    if (state.bar) {{
+      state.bar.style.width = percent + "%";
+    }}
+    if (state.percent) {{
+      state.percent.textContent = percent + "%";
+    }}
+    state.step.classList.toggle("is-active", progress > 0 && progress < 1);
+    state.step.classList.toggle("is-complete", progress >= 1);
+    updateStatus();
+  }}
+
+  function updateTaskProgress(phase, index, value) {{
+    const bucket = progressBuckets[phase];
+    bucket[index] = Math.max(bucket[index] || 0, clamp(value));
+    setStepProgress(phase, phaseProgress(phase));
+  }}
+
+  function withTimeout(promise, ms) {{
     return new Promise((resolve, reject) => {{
+      const timer = setTimeout(() => reject(new Error("preload timeout")), ms);
+      promise.then((value) => {{
+        clearTimeout(timer);
+        resolve(value);
+      }}, (error) => {{
+        clearTimeout(timer);
+        reject(error);
+      }});
+    }});
+  }}
+
+  async function fetchBlobWithProgress(src, options, progress) {{
+    progress(.03);
+    const response = await fetch(src, options);
+    if (!response.ok) throw new Error(src);
+    const total = Number(response.headers.get("content-length")) || 0;
+    if (response.body && response.body.getReader) {{
+      const reader = response.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      while (true) {{
+        const result = await reader.read();
+        if (result.done) break;
+        chunks.push(result.value);
+        loaded += result.value.byteLength;
+        if (total) {{
+          progress(.08 + Math.min(.84, (loaded / total) * .84));
+        }}
+      }}
+      progress(.94);
+      return new Blob(chunks, {{type: response.headers.get("content-type") || ""}});
+    }}
+    const blob = await response.blob();
+    progress(.94);
+    return blob;
+  }}
+
+  async function preloadJson(src, progress) {{
+    const blob = await fetchBlobWithProgress(src, {{
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {{"Accept": "application/json"}}
+    }}, progress);
+    JSON.parse(await blob.text());
+    progress(1);
+  }}
+
+  async function preloadText(src, progress) {{
+    const blob = await fetchBlobWithProgress(src, {{
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {{"Accept": "text/html"}}
+    }}, progress);
+    signMarkup = await blob.text();
+    progress(1);
+  }}
+
+  async function decodeImage(src) {{
+    await new Promise((resolve) => {{
       const image = new Image();
       image.decoding = "async";
       image.onload = async () => {{
         if (image.decode) {{
           try {{ await image.decode(); }} catch (_) {{}}
         }}
-        resolve(src);
+        resolve();
       }};
-      image.onerror = () => reject(new Error(src));
+      image.onerror = () => resolve();
       image.src = src;
     }});
   }}
 
-  async function preloadFetch(src) {{
-    const response = await fetch(src, {{cache: "force-cache", credentials: "same-origin"}});
-    if (!response.ok) throw new Error(src);
-    await response.blob();
-    return src;
-  }}
-
-  function preloadSignPage() {{
-    return fetch(signUrl, {{
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: {{"Accept": "text/html"}}
-    }}).then((response) => {{
-      if (!response.ok) throw new Error("sign page failed");
-      return response.text();
+  async function preloadImage(src, progress) {{
+    await fetchBlobWithProgress(src, {{cache: "force-cache", credentials: "same-origin"}}, (value) => {{
+      progress(value * .86);
     }});
+    progress(.9);
+    await decodeImage(src);
+    progress(1);
   }}
 
-  const assetsReady = Promise.allSettled([
-    prepare,
-    preloadSignPage(),
-    ...imageAssets.map(preloadImage),
-    ...audioAssets.map(preloadFetch)
-  ]);
-
-  function beginStep(step, duration, target = 1) {{
-    if (!step) return;
-    const bar = step.querySelector("em");
-    step.classList.remove("is-complete");
-    step.classList.add("is-active");
-    if (!bar) return;
-    bar.style.transition = "none";
-    bar.style.transform = "scaleX(0)";
-    bar.getBoundingClientRect();
-    bar.style.transition = `transform ${{duration}}ms cubic-bezier(.2,.76,.18,1)`;
-    bar.style.transform = `scaleX(${{target}})`;
+  async function preloadFetch(src, progress) {{
+    await fetchBlobWithProgress(src, {{cache: "force-cache", credentials: "same-origin"}}, progress);
+    progress(1);
   }}
 
-  async function completeStep(index, duration, waitForReady = null) {{
-    const step = steps[index];
-    if (!step) return;
-    beginStep(step, duration, waitForReady ? .88 : 1);
-    if (waitForReady) {{
-      await Promise.all([sleep(duration), waitForReady]);
-      const bar = step.querySelector("em");
-      if (bar) {{
-        bar.style.transition = "transform 260ms cubic-bezier(.2,.76,.18,1)";
-        bar.style.transform = "scaleX(1)";
+  function runTrackedTask(asset, phase, index) {{
+    updateTaskProgress(phase, index, .01);
+    return withTimeout(asset.run((value) => updateTaskProgress(phase, index, value)), 22000)
+      .catch(() => null)
+      .then(() => updateTaskProgress(phase, index, 1));
+  }}
+
+  function enterSignPage() {{
+    if (signMarkup.trim()) {{
+      try {{
+        history.replaceState(null, "", signUrl);
+        document.open();
+        document.write(signMarkup);
+        document.close();
+        return;
+      }} catch (_) {{
+        window.location.replace(signUrl);
       }}
-      await sleep(280);
-    }} else {{
-      await sleep(duration);
     }}
-    step.classList.remove("is-active");
-    step.classList.add("is-complete");
+    window.location.replace(signUrl);
   }}
 
   async function run() {{
-    const ready = Promise.race([assetsReady, sleep(7600)]);
-    await completeStep(0, 920);
-    if (status) status.textContent = "正在写入任务目标、坐标与飞行日志";
-    await completeStep(1, 1180, ready);
-    if (status) status.textContent = "飞行纪录已装载，正在进入签发页面";
-    await sleep(360);
-    window.location.replace(signUrl);
+    const routeAssets = [
+      {{run: (progress) => preloadJson(prepareUrl, progress)}},
+      {{run: (progress) => preloadText(signUrl, progress)}},
+      {{run: (progress) => preloadImage(imageAssets[0], progress)}}
+    ];
+    const buildAssets = [
+      ...imageAssets.slice(1).map((src) => ({{run: (progress) => preloadImage(src, progress)}})),
+      ...audioAssets.map((src) => ({{run: (progress) => preloadFetch(src, progress)}}))
+    ];
+    progressBuckets[0] = new Array(routeAssets.length).fill(0);
+    progressBuckets[1] = new Array(buildAssets.length).fill(0);
+    setStepProgress(0, 0);
+    setStepProgress(1, 0);
+
+    const routeReady = Promise.all(routeAssets.map((asset, index) => runTrackedTask(asset, 0, index)));
+    const buildReady = Promise.all(buildAssets.map((asset, index) => runTrackedTask(asset, 1, index)));
+    await routeReady;
+    setStepProgress(0, 1);
+    await buildReady;
+    setStepProgress(1, 1);
+    await sleep(260);
+    enterSignPage();
   }}
 
   run();
