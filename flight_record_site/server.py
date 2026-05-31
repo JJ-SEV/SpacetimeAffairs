@@ -1295,7 +1295,7 @@ def flight_loading_page(submission_id: str) -> bytes:
       <p class="eyebrow">MISSION DEPLOYMENT</p>
       <h2 id="flight-prep-ready-title">飞行纪录已装载</h2>
       <p>签发模组、飞行纪录图与黑匣音频已就绪。</p>
-      <button type="button" data-enter-sign>启动签发</button>
+      <button type="button" data-enter-sign>确认部署</button>
     </section>
   </div>
 </main>
