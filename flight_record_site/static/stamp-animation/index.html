@@ -2234,6 +2234,14 @@
     let errorPromptBuffer = null;
     let errorPromptBufferReady = null;
     let errorPromptSources = new Set();
+    let failureLoopBuffer = null;
+    let failureLoopBufferReady = null;
+    let failureLoopSource = null;
+    let failureLoopGain = null;
+    let blackboxSignalBuffer = null;
+    let blackboxSignalBufferReady = null;
+    let blackboxSignalSource = null;
+    let blackboxSignalGain = null;
 
     function setGateContent(title, copy, status, ready) {
       if (gateTitle) gateTitle.textContent = title;
@@ -2892,23 +2900,52 @@
       pauseMedia(errorPromptAudio);
     }
 
+    function loadAudioBufferFromElement(audio, label) {
+      if (!audioCtx || !audio) return Promise.resolve(null);
+      const src = audio.currentSrc || audio.src;
+      return fetch(src, { cache: "force-cache" })
+        .then((response) => response.arrayBuffer())
+        .then((buffer) => audioCtx.decodeAudioData(buffer))
+        .catch((error) => {
+          console.warn(`${label} decode failed`, error && (error.name || error.message || error));
+          return null;
+        });
+    }
+
     function loadErrorPromptBuffer() {
       if (!audioCtx || !errorPromptAudio) return Promise.resolve(null);
       if (!errorPromptBufferReady) {
-        const src = errorPromptAudio.currentSrc || errorPromptAudio.src;
-        errorPromptBufferReady = fetch(src)
-          .then((response) => response.arrayBuffer())
-          .then((buffer) => audioCtx.decodeAudioData(buffer))
+        errorPromptBufferReady = loadAudioBufferFromElement(errorPromptAudio, "Error prompt")
           .then((decoded) => {
             errorPromptBuffer = decoded;
             return decoded;
-          })
-          .catch((error) => {
-            console.warn("Error prompt decode failed", error && (error.name || error.message || error));
-            return null;
           });
       }
       return errorPromptBufferReady;
+    }
+
+    function loadFailureLoopBuffer() {
+      if (!audioCtx || !failureLoopAudio) return Promise.resolve(null);
+      if (!failureLoopBufferReady) {
+        failureLoopBufferReady = loadAudioBufferFromElement(failureLoopAudio, "Failure loop")
+          .then((decoded) => {
+            failureLoopBuffer = decoded;
+            return decoded;
+          });
+      }
+      return failureLoopBufferReady;
+    }
+
+    function loadBlackboxSignalBuffer() {
+      if (!audioCtx || !signalAudio) return Promise.resolve(null);
+      if (!blackboxSignalBufferReady) {
+        blackboxSignalBufferReady = loadAudioBufferFromElement(signalAudio, "Blackbox signal")
+          .then((decoded) => {
+            blackboxSignalBuffer = decoded;
+            return decoded;
+          });
+      }
+      return blackboxSignalBufferReady;
     }
 
     function playErrorPromptBuffer() {
@@ -2927,6 +2964,102 @@
       };
       source.start(now);
       return true;
+    }
+
+    function stopFailureLoopBuffer() {
+      if (failureLoopSource) {
+        const source = failureLoopSource;
+        failureLoopSource = null;
+        try { source.onended = null; } catch (_) {}
+        try { source.stop(); } catch (_) {}
+        try { source.disconnect(); } catch (_) {}
+      }
+      if (failureLoopGain) {
+        const gain = failureLoopGain;
+        failureLoopGain = null;
+        try { gain.disconnect(); } catch (_) {}
+      }
+    }
+
+    function playFailureLoopBuffer() {
+      if (!audioCtx || !soundReady || !failureLoopBuffer) return false;
+      try {
+        if (audioCtx.state !== "running") {
+          audioCtx.resume().catch(() => {});
+        }
+        stopFailureLoopBuffer();
+        const now = audioCtx.currentTime;
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        source.buffer = failureLoopBuffer;
+        source.loop = true;
+        gain.gain.setValueAtTime(safeVolume(MIX.failureLoop), now);
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        failureLoopSource = source;
+        failureLoopGain = gain;
+        source.start(now);
+        return true;
+      } catch (error) {
+        console.warn("Failure loop buffer play failed", error && (error.name || error.message || error));
+        stopFailureLoopBuffer();
+        return false;
+      }
+    }
+
+    function stopBlackboxSignalBuffer() {
+      if (blackboxSignalSource) {
+        const source = blackboxSignalSource;
+        blackboxSignalSource = null;
+        try { source.onended = null; } catch (_) {}
+        try { source.stop(); } catch (_) {}
+        try { source.disconnect(); } catch (_) {}
+      }
+      if (blackboxSignalGain) {
+        const gain = blackboxSignalGain;
+        blackboxSignalGain = null;
+        try { gain.disconnect(); } catch (_) {}
+      }
+    }
+
+    function playBlackboxSignalBuffer(runId, playbackRun) {
+      if (!audioCtx || !soundReady || !blackboxSignalBuffer || activeRun !== runId || document.body.dataset.phase !== "blackout") {
+        return false;
+      }
+      try {
+        if (audioCtx.state !== "running") {
+          audioCtx.resume().catch(() => {});
+        }
+        stopBlackboxSignalBuffer();
+        const now = audioCtx.currentTime;
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        source.buffer = blackboxSignalBuffer;
+        gain.gain.setValueAtTime(safeVolume(MIX.blackboxVoice), now);
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        blackboxSignalSource = source;
+        blackboxSignalGain = gain;
+        source.onended = () => {
+          if (blackboxSignalSource === source) {
+            blackboxSignalSource = null;
+          }
+          try { source.disconnect(); } catch (_) {}
+          if (blackboxSignalGain === gain) {
+            blackboxSignalGain = null;
+          }
+          try { gain.disconnect(); } catch (_) {}
+          if (blackboxPlaybackRun === playbackRun && blackboxReplayButton) {
+            blackboxReplayButton.disabled = false;
+          }
+        };
+        source.start(now);
+        return true;
+      } catch (error) {
+        console.warn("Blackbox signal buffer play failed", error && (error.name || error.message || error));
+        stopBlackboxSignalBuffer();
+        return false;
+      }
     }
 
     function playMedia(audio, volume, runId, fallbackMs, fallback = null) {
@@ -2976,8 +3109,7 @@
       return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration);
     }
 
-    function startFailureLoop() {
-      if (!soundReady) return () => {};
+    function startFailureLoopMedia() {
       try {
         failureLoopAudio.pause();
         failureLoopAudio.currentTime = 0;
@@ -2999,6 +3131,37 @@
         stopped = true;
         failureLoopAudio.pause();
         try { failureLoopAudio.currentTime = 0; } catch (_) {}
+      };
+    }
+
+    function startFailureLoop() {
+      if (!soundReady) return () => {};
+      let stopped = false;
+      let stopMediaLoop = () => {};
+      if (playFailureLoopBuffer()) {
+        return () => {
+          if (stopped) return;
+          stopped = true;
+          stopFailureLoopBuffer();
+          pauseMedia(failureLoopAudio);
+        };
+      }
+      if (audioCtx) {
+        loadFailureLoopBuffer().then(() => {
+          if (stopped) return;
+          if (!playFailureLoopBuffer()) {
+            stopMediaLoop = startFailureLoopMedia();
+          }
+        });
+      } else {
+        stopMediaLoop = startFailureLoopMedia();
+      }
+      return () => {
+        if (stopped) return;
+        stopped = true;
+        stopFailureLoopBuffer();
+        stopMediaLoop();
+        pauseMedia(failureLoopAudio);
       };
     }
 
@@ -3026,14 +3189,18 @@
 
     async function unlockSound() {
       let contextReady = false;
-      let errorBufferReady = Promise.resolve(null);
+      let bufferReady = Promise.resolve(null);
       const mediaWarmup = Promise.all(primeMediaElements.map(primeMedia)).then((results) => {
         if (results.some(Boolean)) soundReady = true;
         return soundReady;
       });
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        errorBufferReady = loadErrorPromptBuffer();
+        bufferReady = Promise.allSettled([
+          loadErrorPromptBuffer(),
+          loadFailureLoopBuffer(),
+          loadBlackboxSignalBuffer()
+        ]);
         const resumed = audioCtx.resume();
         if (resumed && typeof resumed.then === "function") await resumed;
         contextReady = audioCtx.state === "running";
@@ -3041,9 +3208,10 @@
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
       }
       if (contextReady) {
-        await Promise.race([errorBufferReady, sleep(720)]);
+        await Promise.race([bufferReady, sleep(720)]);
         soundReady = true;
         mediaWarmup.catch(() => {});
+        bufferReady.catch(() => {});
         return true;
       }
       const mediaReady = await Promise.race([
@@ -3065,6 +3233,7 @@
 
     function stopBlackboxVoice() {
       blackboxPlaybackRun += 1;
+      stopBlackboxSignalBuffer();
       if (!signalAudio) return;
       signalAudio.onended = null;
       signalAudio.pause();
@@ -3075,6 +3244,25 @@
       if (!signalAudio || !soundReady || activeRun !== runId || document.body.dataset.phase !== "blackout") return false;
       const playbackRun = blackboxPlaybackRun + 1;
       blackboxPlaybackRun = playbackRun;
+      let htmlSignalActive = false;
+      stopBlackboxSignalBuffer();
+      if (blackboxReplayButton) blackboxReplayButton.disabled = true;
+      if (!blackboxSignalBuffer && audioCtx) {
+        const signalReady = loadBlackboxSignalBuffer();
+        await Promise.race([signalReady, sleep(900)]);
+        signalReady.then(() => {
+          if (
+            blackboxPlaybackRun === playbackRun &&
+            activeRun === runId &&
+            document.body.dataset.phase === "blackout" &&
+            !blackboxSignalSource &&
+            !htmlSignalActive
+          ) {
+            playBlackboxSignalBuffer(runId, playbackRun);
+          }
+        });
+      }
+      if (playBlackboxSignalBuffer(runId, playbackRun)) return true;
       try {
         signalAudio.onended = null;
         signalAudio.pause();
@@ -3086,11 +3274,13 @@
             blackboxReplayButton.disabled = false;
           }
         };
+        htmlSignalActive = true;
         await signalAudio.play();
         return true;
       } catch (error) {
+        htmlSignalActive = false;
+        if (playBlackboxSignalBuffer(runId, playbackRun)) return true;
         console.warn("Blackbox replay failed", error && (error.name || error.message || error));
-        soundReady = false;
         setBlackboxControls(true);
         return false;
       }
@@ -3240,6 +3430,8 @@
       setArmed(false);
       jumped = false;
       stopErrorPromptPlayback();
+      stopFailureLoopBuffer();
+      stopBlackboxVoice();
       mediaElements.forEach(pauseMedia);
       soundReady = false;
       setBlackboxControls(false);
