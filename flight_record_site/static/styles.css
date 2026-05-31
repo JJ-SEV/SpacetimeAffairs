@@ -1198,24 +1198,6 @@ button.danger {
   opacity: 0.86;
 }
 
-.flight-sign-prep-steps i {
-  position: relative;
-  overflow: hidden;
-  height: 6px;
-  border: 1px solid rgba(103, 199, 239, 0.26);
-  background: rgba(2, 8, 13, 0.74);
-}
-
-.flight-sign-prep-steps em {
-  position: absolute;
-  inset: 0 auto 0 0;
-  display: block;
-  width: 0;
-  background: linear-gradient(90deg, var(--blue), var(--green));
-  box-shadow: 0 0 20px rgba(128, 227, 188, 0.48);
-  transition: width 0.48s cubic-bezier(.2,.76,.18,1);
-}
-
 .flight-sign-prep-status {
   margin: 0;
   min-height: 24px;
@@ -2347,8 +2329,7 @@ dd {
   .auth-card,
   .loading-grid span,
   .loading-ring,
-  .loading-bar span,
-  .flight-sign-prep-steps em {
+  .loading-bar span {
     animation: none;
   }
 }

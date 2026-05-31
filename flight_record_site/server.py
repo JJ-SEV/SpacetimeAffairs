@@ -1285,11 +1285,9 @@ def flight_loading_page(submission_id: str) -> bytes:
     <div class="flight-sign-prep-steps" data-flight-prep-steps>
       <span data-prep-step>
         <b><span>01 / ROUTE LOCK</span><small data-prep-percent>0%</small></b>
-        <i><em></em></i>
       </span>
       <span data-prep-step>
         <b><span>02 / RECORD BUILD</span><small data-prep-percent>0%</small></b>
-        <i><em></em></i>
       </span>
     </div>
     <p class="flight-sign-prep-status" data-prep-status>正在锁定任务目标与写入飞行日志</p>
