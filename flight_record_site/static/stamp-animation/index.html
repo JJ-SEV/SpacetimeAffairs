@@ -1262,6 +1262,14 @@
     .blackbox-replay {
       min-width: 72px;
       padding: 0 12px;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity .28s ease, transform .28s cubic-bezier(.16,.78,.18,1), filter .18s ease;
+    }
+
+    body[data-blackbox-actions="ready"] .blackbox-replay {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .blackbox-continue {
@@ -1279,10 +1287,9 @@
       transition: opacity .42s ease, transform .42s cubic-bezier(.16,.78,.18,1), filter .18s ease;
     }
 
-    body[data-phase="blackout"] .blackbox-continue {
+    body[data-phase="blackout"][data-blackbox-actions="ready"] .blackbox-continue {
       opacity: 1;
       transform: translateY(0);
-      transition-delay: .72s;
     }
 
     .blackbox-replay:hover,
@@ -1295,6 +1302,16 @@
       cursor: wait;
       opacity: .52;
       filter: saturate(.72);
+    }
+
+    body:not([data-blackbox-actions="ready"]) .blackbox-replay,
+    body:not([data-blackbox-actions="ready"]) .blackbox-continue {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body:not([data-blackbox-actions="ready"]) .blackbox-replay {
+      transform: translateY(-4px);
     }
 
     .blackbox-body {
@@ -2226,6 +2243,7 @@
     let activeRun = 0;
     let jumped = false;
     let blackboxPlaybackRun = 0;
+    let blackboxActionsReleased = false;
     let errorFrame = 0;
     let errorStartTime = 0;
     let errorSparks = [];
@@ -2335,6 +2353,9 @@
         document.body.dataset.phase = phase;
       } else {
         delete document.body.dataset.phase;
+      }
+      if (phase !== "blackout") {
+        setBlackboxActionsVisible(false);
       }
       if (phase === "warning") {
         startErrorCanvas();
@@ -3049,9 +3070,7 @@
             blackboxSignalGain = null;
           }
           try { gain.disconnect(); } catch (_) {}
-          if (blackboxPlaybackRun === playbackRun && blackboxReplayButton) {
-            blackboxReplayButton.disabled = false;
-          }
+          releaseBlackboxActionsForPlayback(playbackRun);
         };
         source.start(now);
         return true;
@@ -3222,6 +3241,26 @@
       return soundReady;
     }
 
+    function setBlackboxActionsVisible(visible) {
+      blackboxActionsReleased = Boolean(visible);
+      if (visible) {
+        document.body.dataset.blackboxActions = "ready";
+      } else {
+        delete document.body.dataset.blackboxActions;
+      }
+      [blackboxReplayButton, blackboxContinueButton].forEach((button) => {
+        if (!button) return;
+        button.setAttribute("aria-hidden", visible ? "false" : "true");
+        button.tabIndex = visible ? 0 : -1;
+      });
+    }
+
+    function releaseBlackboxActionsForPlayback(playbackRun) {
+      if (blackboxPlaybackRun !== playbackRun || activeRun <= 0 || document.body.dataset.phase !== "blackout") return;
+      setBlackboxActionsVisible(true);
+      setBlackboxControls(true);
+    }
+
     function setBlackboxControls(enabled) {
       if (blackboxReplayButton) {
         blackboxReplayButton.disabled = !enabled || !soundReady;
@@ -3270,9 +3309,7 @@
         if (signalAudio.readyState === 0) signalAudio.load();
         signalAudio.volume = MIX.blackboxVoice;
         signalAudio.onended = () => {
-          if (blackboxPlaybackRun === playbackRun && blackboxReplayButton) {
-            blackboxReplayButton.disabled = false;
-          }
+          releaseBlackboxActionsForPlayback(playbackRun);
         };
         htmlSignalActive = true;
         await signalAudio.play();
@@ -3281,7 +3318,7 @@
         htmlSignalActive = false;
         if (playBlackboxSignalBuffer(runId, playbackRun)) return true;
         console.warn("Blackbox replay failed", error && (error.name || error.message || error));
-        setBlackboxControls(true);
+        releaseBlackboxActionsForPlayback(playbackRun);
         return false;
       }
     }
@@ -3306,6 +3343,7 @@
           if (blackboxReplayButton) blackboxReplayButton.removeEventListener("click", replayHandler);
           if (blackboxContinueButton) blackboxContinueButton.removeEventListener("click", continueHandler);
           setBlackboxControls(false);
+          setBlackboxActionsVisible(false);
         };
 
         if (!blackboxContinueButton) {
@@ -3316,7 +3354,8 @@
 
         if (blackboxReplayButton) blackboxReplayButton.addEventListener("click", replayHandler);
         blackboxContinueButton.addEventListener("click", continueHandler);
-        setBlackboxControls(true);
+        setBlackboxActionsVisible(false);
+        setBlackboxControls(false);
 
         if (!await wait(blackboxOpenDelay, runId)) {
           finish(false);
@@ -3330,7 +3369,15 @@
           return;
         }
         if (soundReady) {
-          replayBlackboxVoice(runId);
+          replayBlackboxVoice(runId).then((played) => {
+            if (!played && activeRun === runId && document.body.dataset.phase === "blackout" && !blackboxActionsReleased) {
+              setBlackboxActionsVisible(true);
+              setBlackboxControls(true);
+            }
+          });
+        } else {
+          setBlackboxActionsVisible(true);
+          setBlackboxControls(true);
         }
       });
     }
@@ -3434,6 +3481,7 @@
       stopBlackboxVoice();
       mediaElements.forEach(pauseMedia);
       soundReady = false;
+      setBlackboxActionsVisible(false);
       setBlackboxControls(false);
 
       const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
