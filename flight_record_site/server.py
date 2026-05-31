@@ -1446,27 +1446,49 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}
 
   async function decodeImage(src) {{
-    await new Promise((resolve) => {{
+    const ok = await new Promise((resolve) => {{
       const image = new Image();
       image.decoding = "async";
       image.onload = async () => {{
         if (image.decode) {{
           try {{ await image.decode(); }} catch (_) {{}}
         }}
-        resolve();
+        resolve(image.naturalWidth > 0);
       }};
-      image.onerror = () => resolve();
+      image.onerror = () => resolve(false);
       image.src = src;
     }});
+    if (!ok) throw new Error(src);
+  }}
+
+  function cacheBustedUrl(src, attempt) {{
+    try {{
+      const url = new URL(src, window.location.href);
+      url.searchParams.set("visualRetry", Date.now().toString() + "-" + attempt);
+      return url.toString();
+    }} catch (_) {{
+      return src;
+    }}
   }}
 
   async function preloadImage(src, progress) {{
-    await fetchBlobWithProgress(src, {{cache: "force-cache", credentials: "same-origin"}}, (value) => {{
-      progress(value * .86);
-    }});
-    progress(.9);
-    await decodeImage(src);
-    progress(1);
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {{
+      const target = attempt ? cacheBustedUrl(src, attempt) : src;
+      try {{
+        await fetchBlobWithProgress(target, {{cache: attempt ? "no-store" : "force-cache", credentials: "same-origin"}}, (value) => {{
+          progress(Math.max(.02, value * .86));
+        }});
+        progress(.9);
+        await decodeImage(target);
+        progress(1);
+        return;
+      }} catch (error) {{
+        lastError = error;
+        await sleep(220 + attempt * 260);
+      }}
+    }}
+    throw lastError || new Error(src);
   }}
 
   async function preloadFetch(src, progress) {{

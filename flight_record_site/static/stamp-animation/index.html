@@ -2184,6 +2184,7 @@
     const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
     const readoutSteps = Array.from(document.querySelectorAll("[data-load-step]"));
     const progressBar = document.querySelector("[data-progress-bar]");
+    const signingImages = Array.from(document.querySelectorAll(".record, .stamp-mark, .scanner-device"));
     const criticalImages = Array.from(document.querySelectorAll(".record, .stamp-mark, .scanner-device, .error-plate, .blackbox-bg, .access-gate-bg"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
@@ -2227,6 +2228,7 @@
     let errorFrame = 0;
     let errorStartTime = 0;
     let errorSparks = [];
+    let signingImagesReady = null;
     let criticalAssetsReady = null;
     let errorPromptBuffer = null;
     let errorPromptBufferReady = null;
@@ -2243,13 +2245,13 @@
 
     function waitForImageReady(image) {
       if (image.complete && image.naturalWidth > 0) {
-        return Promise.resolve();
+        return Promise.resolve(true);
       }
       return new Promise((resolve) => {
         const done = () => {
           image.removeEventListener("load", done);
           image.removeEventListener("error", done);
-          resolve();
+          resolve(image.complete && image.naturalWidth > 0);
         };
         image.addEventListener("load", done, { once: true });
         image.addEventListener("error", done, { once: true });
@@ -2283,6 +2285,32 @@
         ]);
       }
       return criticalAssetsReady;
+    }
+
+    function waitForSigningImages() {
+      if (!signingImagesReady) {
+        signingImagesReady = Promise.all(signingImages.map(waitForImageReady))
+          .then((results) => results.every(Boolean));
+      }
+      return signingImagesReady;
+    }
+
+    function cacheBustedUrl(src) {
+      try {
+        const url = new URL(src, window.location.href);
+        url.searchParams.set("visualRetry", Date.now().toString());
+        return url.toString();
+      } catch (_) {
+        return src;
+      }
+    }
+
+    function reloadSigningImages() {
+      signingImagesReady = null;
+      signingImages.forEach((image) => {
+        image.src = cacheBustedUrl(image.currentSrc || image.src);
+      });
+      return waitForSigningImages();
     }
 
     function clearSequenceTimers() {
@@ -3168,11 +3196,18 @@
       setArmed(false);
       setPhase("preloading");
       if (signalAudio) signalAudio.load();
+      const imagesReady = waitForSigningImages().catch(() => false);
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (params.get("prepared") === "1") {
         setStartupChecklistComplete();
-        setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
+        setGateContent("飞行纪录已装载", "正在校验飞行纪录图与签发模组", "Loading visuals", false);
         showAudioChoice();
+        const imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
+        if (!imagesOk) {
+          setGateContent("图像模组加载失败", "网络不稳定，请重新部署", "Retry", true);
+          return;
+        }
+        setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
         assetsReady.catch(() => {});
         return;
       }
@@ -3202,13 +3237,25 @@
       setBlackboxControls(false);
 
       const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
+      const imagesReady = waitForSigningImages().catch(() => false);
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (enableAudio) {
         setGateContent("签发模组启动中", "正在解锁警报与黑匣音频", "Unlocking audio", false);
         await Promise.race([soundUnlock, sleep(1400)]);
       }
-      await Promise.race([assetsReady, sleep(1400)]);
+      setGateContent("签发模组启动中", "正在校验飞行纪录图与扫描模组", "Loading visuals", false);
+      let imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
+      if (!imagesOk) {
+        setGateContent("签发模组启动中", "正在重新拉取飞行纪录图与扫描模组", "Retrying visuals", false);
+        imagesOk = await Promise.race([reloadSigningImages(), sleep(10000).then(() => false)]);
+      }
       if (activeRun !== runId) return;
+      if (!imagesOk) {
+        setGateContent("图像模组加载失败", "网络不稳定，请重新部署", "Retry", true);
+        showAudioChoice();
+        return;
+      }
+      await Promise.race([assetsReady, sleep(600)]);
 
       setPhase("");
       setArmed(true);
