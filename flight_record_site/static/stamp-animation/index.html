@@ -7,7 +7,7 @@
   <link rel="preload" as="audio" href="assets/xia-yizhou-signal.m4a?v=ce6de9d9v3" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/alarm-sound.m4a" type="audio/mp4">
-  <link rel="preload" as="audio" href="assets/error-error-en.m4a" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/error-prompt-stutter.m4a" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/electric-glitch.m4a" type="audio/mp4">
   <style>
     :root {
@@ -2022,7 +2022,6 @@
   <audio id="failure-loop" src="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
   <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
-  <audio id="error-word" src="assets/error-error-en.m4a" preload="auto"></audio>
   <audio id="access-granted-voice" src="assets/access-granted-system.m4a?v=zarvox1" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
@@ -2143,11 +2142,10 @@
     const failureLoopAudio = document.querySelector("#failure-loop");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
-    const errorWordAudio = document.querySelector("#error-word");
     const accessGrantedAudio = document.querySelector("#access-granted-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const primeMediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorWordAudio, accessGrantedAudio, electricGlitchAudio];
-    const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, errorWordAudio, accessGrantedAudio, electricGlitchAudio];
+    const primeMediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
+    const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
     const readoutSteps = Array.from(document.querySelectorAll("[data-load-step]"));
     const progressBar = document.querySelector("[data-progress-bar]");
     const criticalImages = Array.from(document.querySelectorAll(".record"));
@@ -2731,9 +2729,9 @@
     }
 
     function loadErrorPromptBuffer() {
-      if (!audioCtx || !errorWordAudio) return Promise.resolve(null);
+      if (!audioCtx || !errorPromptAudio) return Promise.resolve(null);
       if (!errorPromptBufferReady) {
-        const src = errorWordAudio.currentSrc || errorWordAudio.src;
+        const src = errorPromptAudio.currentSrc || errorPromptAudio.src;
         errorPromptBufferReady = fetch(src)
           .then((response) => response.arrayBuffer())
           .then((buffer) => audioCtx.decodeAudioData(buffer))
@@ -2752,21 +2750,14 @@
     function playErrorPromptBuffer() {
       if (!audioCtx || !soundReady || !errorPromptBuffer) return false;
       const now = audioCtx.currentTime;
-      const clipStart = 0.02;
-      const clipLength = Math.min(0.18, Math.max(0.08, errorPromptBuffer.duration - clipStart));
-      [0.04, 0.28, 0.52, 0.76].forEach((offset, index) => {
-        const source = audioCtx.createBufferSource();
-        const gain = audioCtx.createGain();
-        source.buffer = errorPromptBuffer;
-        gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(safeVolume(MIX.errorVoice * (0.92 - index * 0.08)), now + offset + 0.018);
-        gain.gain.setValueAtTime(safeVolume(MIX.errorVoice * (0.82 - index * 0.07)), now + offset + clipLength * 0.72);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + clipLength);
-        source.connect(gain);
-        gain.connect(audioCtx.destination);
-        source.start(now + offset, clipStart, clipLength);
-      });
-      playElectricCrackle(1.22);
+      const source = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+      source.buffer = errorPromptBuffer;
+      gain.gain.setValueAtTime(safeVolume(MIX.errorVoice), now);
+      gain.gain.linearRampToValueAtTime(0.0001, now + errorVoiceDuration / 1000);
+      source.connect(gain);
+      gain.connect(audioCtx.destination);
+      source.start(now);
       return true;
     }
 
