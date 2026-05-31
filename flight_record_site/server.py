@@ -1290,14 +1290,6 @@ def flight_loading_page(submission_id: str) -> bytes:
     <p class="flight-sign-prep-status" data-prep-status>正在锁定任务目标与写入飞行日志</p>
     <img class="flight-sign-prep-probe" src="{record_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true">
   </section>
-  <div class="flight-prep-ready-gate" data-prep-ready hidden aria-hidden="true">
-    <section class="flight-prep-ready-card" role="dialog" aria-modal="true" aria-labelledby="flight-prep-ready-title">
-      <p class="eyebrow">MISSION DEPLOYMENT</p>
-      <h2 id="flight-prep-ready-title">飞行纪录已装载</h2>
-      <p>签发模组、飞行纪录图与黑匣音频已就绪。</p>
-      <button type="button" data-enter-sign>确认部署</button>
-    </section>
-  </div>
 </main>
 <script>
 (() => {{
@@ -1307,8 +1299,6 @@ def flight_loading_page(submission_id: str) -> bytes:
   const audioAssets = {json.dumps(sign_audio_assets, ensure_ascii=False)};
   const steps = Array.from(document.querySelectorAll("[data-prep-step]"));
   const status = document.querySelector("[data-prep-status]");
-  const readyGate = document.querySelector("[data-prep-ready]");
-  const enterButton = document.querySelector("[data-enter-sign]");
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const prepare = fetch(prepareUrl, {{
     cache: "no-store",
@@ -1396,22 +1386,9 @@ def flight_loading_page(submission_id: str) -> bytes:
     await completeStep(0, 920);
     if (status) status.textContent = "正在写入任务目标、坐标与飞行日志";
     await completeStep(1, 1180, ready);
-    await assetsReady.catch(() => null);
-    if (status) status.textContent = "飞行纪录已装载，等待确认部署";
-    if (readyGate) {{
-      readyGate.hidden = false;
-      readyGate.setAttribute("aria-hidden", "false");
-    }}
-    if (enterButton) enterButton.focus();
-  }}
-
-  if (enterButton) {{
-    enterButton.addEventListener("click", () => {{
-      enterButton.disabled = true;
-      enterButton.textContent = "进入签发";
-      if (status) status.textContent = "正在进入签发页面";
-      window.location.href = signUrl;
-    }});
+    if (status) status.textContent = "飞行纪录已装载，正在进入签发页面";
+    await sleep(360);
+    window.location.replace(signUrl);
   }}
 
   run();
