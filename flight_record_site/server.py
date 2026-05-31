@@ -56,7 +56,7 @@ LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 RECORD_JPG_VERSION = "jpg-v1"
-STATIC_CSS_VERSION = "20260531-sign-prep-gated"
+STATIC_CSS_VERSION = "20260531-affairs-copy"
 CRITICAL_LAYOUT_CSS = """
 :root{--ink:#eff7f4;--panel:rgba(9,17,25,.78);--line:rgba(133,181,202,.34);--muted:#9eb2b5;--accent:#ff7b35;--gold:#e7b45c;--cyan:#67c7ef;--green:#80e3bc;--wash:#071018}
 *{box-sizing:border-box}
@@ -67,6 +67,7 @@ body.home-body{background:linear-gradient(180deg,rgba(4,10,16,.38),rgba(4,9,14,.
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:92px;padding:20px 24px;color:#f8f9ee;background:linear-gradient(135deg,rgba(8,15,23,.94),rgba(19,31,42,.84));border:1px solid rgba(103,199,239,.28);border-bottom:3px solid rgba(255,123,53,.86);border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
 .topbar h1{margin:6px 0 0;font-family:"Times New Roman",serif;font-size:36px;line-height:1.1}
 .eyebrow{margin:0;color:var(--cyan);font-family:"Times New Roman",serif;font-size:13px;font-weight:700;letter-spacing:0;text-transform:uppercase}
+.brand-eyebrow{text-transform:none}
 nav{display:flex;gap:10px;flex-wrap:wrap}
 nav a,.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid rgba(103,199,239,.42);border-radius:6px;background:linear-gradient(180deg,rgba(255,123,53,.94),rgba(181,72,32,.96));color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
 nav a{border-color:rgba(103,199,239,.28);background:rgba(6,14,22,.68);color:#dceff3}
@@ -1215,9 +1216,9 @@ def destination_page(message: str = "") -> bytes:
     <span></span>
   </div>
   <div class="mission-copy">
-    <p class="eyebrow">SPACETIME AUTHORITY</p>
+    <p class="eyebrow brand-eyebrow">Spacetime Affairs</p>
     <h2>欢迎 执舰官-夏以昼</h2>
-    <p class="mission-brief">登录时空管理局系统，请输入你要寻找的目标，确认目的地。</p>
+    <p class="mission-brief">请输入你要寻找的目标，确认目的地，系统将自动为您规划航道。</p>
   </div>
   <div class="signal-grid destination-signal-grid" aria-hidden="true">
     <div><b>TARGET</b><span>INPUT</span></div>
@@ -1230,7 +1231,7 @@ def destination_page(message: str = "") -> bytes:
 <form class="panel wide destination-form" action="/flight/create" method="post">
   <div class="section-head">
     <span>01</span>
-    <h2>输入目标，确认目的地</h2>
+    <h2>确认目标/目的地</h2>
   </div>
   <label>目标
     <input name="destination_name" maxlength="24" placeholder="输入目标姓名" inputmode="text" lang="zh-CN" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
