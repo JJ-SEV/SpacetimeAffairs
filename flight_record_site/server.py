@@ -1232,6 +1232,10 @@ def flight_loading_page(submission_id: str) -> bytes:
         "<title>生成飞行纪录</title>",
     )
     page = page.replace(
+        "<title>生成飞行纪录</title>",
+        f'<title>生成飞行纪录</title>\n  <link rel="preload" as="image" href="{record_src}" fetchpriority="high">',
+    )
+    page = page.replace(
         'src="assets/flight-record-default-unstamped.png"',
         f'src="{record_src}"',
     )

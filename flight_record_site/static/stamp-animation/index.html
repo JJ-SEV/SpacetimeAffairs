@@ -384,7 +384,7 @@
 
     body[data-phase="preloading"] .progress span {
       animation: none !important;
-      transition: transform .82s cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease;
+      transition: transform .46s cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease;
       background: linear-gradient(90deg, var(--cyan), var(--mint));
       box-shadow: 0 0 22px rgba(130,255,210,.45);
     }
@@ -2152,6 +2152,8 @@
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
     const blackboxOpenDelay = 120;
+    const startupStepDuration = 480;
+    const startupStepSettle = 70;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
@@ -2197,18 +2199,14 @@
     }
 
     function waitForImageReady(image) {
-      const decodeImage = () => {
-        if (!image.decode) return Promise.resolve();
-        return image.decode().catch(() => {});
-      };
       if (image.complete && image.naturalWidth > 0) {
-        return decodeImage();
+        return Promise.resolve();
       }
       return new Promise((resolve) => {
         const done = () => {
           image.removeEventListener("load", done);
           image.removeEventListener("error", done);
-          resolve(decodeImage());
+          resolve();
         };
         image.addEventListener("load", done, { once: true });
         image.addEventListener("error", done, { once: true });
@@ -2442,10 +2440,10 @@
         setProgressScale(0, false);
         if (progressBar) progressBar.getBoundingClientRect();
         setProgressScale(1, true);
-        await sleep(840);
+        await sleep(startupStepDuration);
         step.classList.remove("is-active");
         step.classList.add("is-complete");
-        await sleep(130);
+        await sleep(startupStepSettle);
       }
       if (progressBar) {
         progressBar.style.background = "linear-gradient(90deg, var(--mint), #d9fff0)";
