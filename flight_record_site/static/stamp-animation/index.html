@@ -3200,7 +3200,7 @@
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (params.get("prepared") === "1") {
         setStartupChecklistComplete();
-        setGateContent("飞行纪录已装载", "正在校验飞行纪录图与签发模组", "Loading visuals", false);
+        setGateContent("飞行纪录已装载", "正在校验飞行纪录图与签发模组", "Loading", false);
         showAudioChoice();
         const imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
         if (!imagesOk) {
@@ -3243,10 +3243,10 @@
         setGateContent("签发模组启动中", "正在启动签发模组", "Starting", false);
         await Promise.race([soundUnlock, sleep(1400)]);
       }
-      setGateContent("签发模组启动中", "正在校验飞行纪录图与扫描模组", "Loading visuals", false);
+      setGateContent("签发模组启动中", "正在校验飞行纪录图与扫描模组", "Loading", false);
       let imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
       if (!imagesOk) {
-        setGateContent("签发模组启动中", "正在重新拉取飞行纪录图与扫描模组", "Retrying visuals", false);
+        setGateContent("签发模组启动中", "正在重新拉取飞行纪录图与扫描模组", "Retrying", false);
         imagesOk = await Promise.race([reloadSigningImages(), sleep(10000).then(() => false)]);
       }
       if (activeRun !== runId) return;
