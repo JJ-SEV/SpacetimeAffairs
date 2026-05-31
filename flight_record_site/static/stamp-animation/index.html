@@ -3207,7 +3207,7 @@
           setGateContent("图像模组加载失败", "网络不稳定，请重新部署", "Retry", true);
           return;
         }
-        setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
+        setGateContent("飞行纪录已装载", "点击确认部署启动签发", "Ready", true);
         assetsReady.catch(() => {});
         return;
       }
@@ -3220,7 +3220,7 @@
       }
       await checklist;
       await Promise.race([assetsReady, sleep(startupAssetTimeout)]);
-      setGateContent("飞行纪录已装载", "点击确认部署并启用音频", "Ready", true);
+      setGateContent("飞行纪录已装载", "点击确认部署启动签发", "Ready", true);
       showAudioChoice();
     }
 
@@ -3240,7 +3240,7 @@
       const imagesReady = waitForSigningImages().catch(() => false);
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (enableAudio) {
-        setGateContent("签发模组启动中", "正在解锁警报与黑匣音频", "Unlocking audio", false);
+        setGateContent("签发模组启动中", "正在启动签发模组", "Starting", false);
         await Promise.race([soundUnlock, sleep(1400)]);
       }
       setGateContent("签发模组启动中", "正在校验飞行纪录图与扫描模组", "Loading visuals", false);
