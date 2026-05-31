@@ -1607,6 +1607,10 @@ input[type="file"] {
   font-weight: 800;
 }
 
+.destination-signal-grid {
+  display: none;
+}
+
 .quick-gallery {
   display: grid;
   gap: 10px;
@@ -2139,6 +2143,47 @@ dd {
 
   .destination-command .desktop-archive {
     display: none;
+  }
+
+  .destination-command {
+    grid-template-columns: 74px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 14px;
+  }
+
+  .destination-command .radar-scope {
+    width: 74px;
+  }
+
+  .destination-command .mission-copy {
+    min-width: 0;
+  }
+
+  .destination-command .mission-copy h2 {
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  .destination-signal-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .destination-signal-grid div {
+    min-height: 54px;
+    padding: 9px;
+  }
+
+  .destination-signal-grid b {
+    font-size: 10px;
+  }
+
+  .destination-signal-grid span {
+    margin-top: 5px;
+    font-size: 14px;
   }
 
   .mobile-archive {

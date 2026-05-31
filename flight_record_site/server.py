@@ -1153,6 +1153,11 @@ def destination_page(message: str = "") -> bytes:
     <p class="eyebrow">TARGET CLEARANCE</p>
     <h2>规划飞行航道</h2>
   </div>
+  <div class="signal-grid destination-signal-grid" aria-hidden="true">
+    <div><b>TARGET</b><span>INPUT</span></div>
+    <div><b>ROUTE</b><span>LOCK</span></div>
+    <div><b>RECORD</b><span>BUILD</span></div>
+  </div>
 {desktop_archive}
 </section>
 
