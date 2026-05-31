@@ -2210,9 +2210,9 @@ def player_loading_page() -> bytes:
       <span class="loading-dot"></span>
     </div>
     <p class="eyebrow">ACCESS GRANTED</p>
-    <h1>同步飞行通道</h1>
+    <h1>欢迎</h1>
     <div class="loading-bar" aria-hidden="true"><span></span></div>
-    <p class="loading-copy">正在建立任务目标链路</p>
+    <p class="loading-copy">执舰官— 夏以昼 登录系统。</p>
     <a class="button ghost loading-fallback" href="/">进入控制台</a>
   </section>
 </main>
@@ -3066,7 +3066,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_html(player_gate_page("密码不正确，密码为8位数字。", password_hint_attempt=True), 403)
                 return
             self.redirect(
-                "/",
+                "/gate/loading",
                 (("Set-Cookie", f"{PLAYER_COOKIE}={player_cookie_token()}; Path=/; HttpOnly; SameSite=Lax"),),
             )
         elif parsed.path == "/flight/create":
