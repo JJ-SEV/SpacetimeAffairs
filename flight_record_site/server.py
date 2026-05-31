@@ -1203,12 +1203,39 @@ def flight_confirm_page(submission_id: str) -> bytes:
   <div class="screen-warning simple-warning">
     <span>请截图保存编号</span>
   </div>
-  <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post">
+  <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post" data-flight-confirm-form>
     <input type="hidden" name="id" value="{esc(row['id'])}">
     <button class="confirm-button" type="submit">确认</button>
   </form>
+  <div class="flight-confirm-loading" data-flight-confirm-loading hidden aria-hidden="true">
+    <section class="flight-confirm-loading-panel" aria-live="polite">
+      <p class="eyebrow">MISSION DEPLOYMENT</p>
+      <h3>签发飞行纪录</h3>
+      <div class="flight-confirm-loading-steps" aria-hidden="true">
+        <span><b>01 / ROUTE LOCK</b><i></i></span>
+        <span><b>02 / RECORD BUILD</b><i></i></span>
+      </div>
+      <p>正在锁定任务目标与写入飞行日志</p>
+    </section>
+  </div>
   <img src="{animation_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true" class="preload-probe">
 </section>
+<script>
+(() => {{
+  const form = document.querySelector("[data-flight-confirm-form]");
+  const overlay = document.querySelector("[data-flight-confirm-loading]");
+  if (!form || !overlay) return;
+  form.addEventListener("submit", () => {{
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    const button = form.querySelector("button");
+    if (button) {{
+      button.disabled = true;
+      button.textContent = "签发中";
+    }}
+  }});
+}})();
+</script>
 """
     return layout("飞行纪录预览", body, body_class="home-body")
 

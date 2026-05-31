@@ -338,6 +338,18 @@
       background: var(--mint);
     }
 
+    .readout div.is-failed {
+      border-color: rgba(255,63,63,.58);
+      background: linear-gradient(90deg, rgba(255,63,63,.14), rgba(4,13,19,.62));
+      box-shadow: inset 0 0 28px rgba(255,63,63,.1);
+    }
+
+    .readout div.is-failed::before {
+      animation: none !important;
+      transform: scaleY(1) !important;
+      background: var(--danger);
+    }
+
     .readout b {
       display: block;
       color: rgba(236,248,243,.72);
@@ -351,6 +363,10 @@
 
     .readout div.is-complete b {
       color: var(--mint);
+    }
+
+    .readout div.is-failed b {
+      color: var(--danger);
     }
 
     .readout span {
@@ -392,6 +408,26 @@
       transition: transform .46s cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease;
       background: linear-gradient(90deg, var(--cyan), var(--mint));
       box-shadow: 0 0 22px rgba(130,255,210,.45);
+    }
+
+    body[data-scan-status="active"] .progress span {
+      animation: none !important;
+      transition: transform 6.5s cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease;
+      background: linear-gradient(90deg, var(--cyan), var(--amber), var(--danger));
+      box-shadow: 0 0 24px rgba(255,63,63,.48);
+    }
+
+    body[data-scan-status="failed"] .progress {
+      border-color: rgba(255,63,63,.55);
+      box-shadow: 0 0 18px rgba(255,63,63,.22);
+    }
+
+    body[data-scan-status="failed"] .progress span {
+      animation: none !important;
+      transition: background .16s ease, box-shadow .16s ease;
+      transform: scaleX(1);
+      background: linear-gradient(90deg, var(--danger), #ff7a4f);
+      box-shadow: 0 0 26px rgba(255,63,63,.62);
     }
 
     .complete {
@@ -1318,7 +1354,7 @@
     body:not([data-armed="true"]) .scanner-carriage,
     body:not([data-armed="true"]) .scan-light,
     body:not([data-armed="true"]) .pressure-pad,
-    body:not([data-armed="true"]) .readout div:not(.is-active):not(.is-complete)::before,
+    body:not([data-armed="true"]) .readout div:not(.is-active):not(.is-complete):not(.is-failed)::before,
     body:not([data-armed="true"]) .progress span,
     body:not([data-armed="true"]) .complete,
     html[data-frame] .record-shell,
@@ -2245,6 +2281,14 @@
       }
     }
 
+    function setScanStatus(status) {
+      if (status) {
+        document.body.dataset.scanStatus = status;
+      } else {
+        delete document.body.dataset.scanStatus;
+      }
+    }
+
     function setStatic(enabled) {
       if (enabled) {
         document.body.dataset.static = "true";
@@ -2427,11 +2471,19 @@
       progressBar.style.transform = `scaleX(${Math.max(0, Math.min(1, value))})`;
     }
 
+    function setReadoutStepState(step, state = "") {
+      if (!step) return;
+      step.classList.remove("is-active", "is-complete", "is-failed");
+      if (state) step.classList.add(`is-${state}`);
+    }
+
     function resetReadoutState() {
+      setScanStatus("");
       readoutSteps.forEach((step) => {
-        step.classList.remove("is-active", "is-complete");
+        setReadoutStepState(step);
       });
       if (progressBar) {
+        progressBar.style.animation = "";
         progressBar.style.transition = "";
         progressBar.style.transform = "";
         progressBar.style.background = "";
@@ -2439,23 +2491,58 @@
       }
     }
 
+    async function runReadoutStep(index, duration = startupStepDuration) {
+      const step = readoutSteps[index];
+      if (!step) return;
+      setReadoutStepState(step, "active");
+      setProgressScale(0, false);
+      if (progressBar) progressBar.getBoundingClientRect();
+      setProgressScale(1, true);
+      await sleep(duration);
+      setReadoutStepState(step, "complete");
+      await sleep(startupStepSettle);
+    }
+
     async function runStartupChecklist() {
       resetReadoutState();
       setProgressScale(0, false);
-      for (const step of readoutSteps) {
-        step.classList.add("is-active");
-        setProgressScale(0, false);
-        if (progressBar) progressBar.getBoundingClientRect();
-        setProgressScale(1, true);
-        await sleep(startupStepDuration);
-        step.classList.remove("is-active");
-        step.classList.add("is-complete");
-        await sleep(startupStepSettle);
-      }
+      await runReadoutStep(0);
+      await runReadoutStep(1);
       if (progressBar) {
+        progressBar.style.transition = "background .2s ease, box-shadow .2s ease";
+        progressBar.style.transform = "scaleX(1)";
         progressBar.style.background = "linear-gradient(90deg, var(--mint), #d9fff0)";
         progressBar.style.boxShadow = "0 0 24px rgba(130,255,210,.6)";
       }
+    }
+
+    function startScanSealProgress(duration = stampDuration) {
+      setReadoutStepState(readoutSteps[0], "complete");
+      setReadoutStepState(readoutSteps[1], "complete");
+      setReadoutStepState(readoutSteps[2], "active");
+      setScanStatus("active");
+      if (!progressBar) return;
+      progressBar.style.animation = "none";
+      progressBar.style.transition = "none";
+      progressBar.style.transform = "scaleX(0)";
+      progressBar.style.background = "linear-gradient(90deg, var(--cyan), var(--amber), var(--danger))";
+      progressBar.style.boxShadow = "0 0 24px rgba(255,63,63,.48)";
+      progressBar.getBoundingClientRect();
+      progressBar.style.transition = `transform ${duration}ms cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease`;
+      progressBar.style.transform = "scaleX(1)";
+    }
+
+    function failScanSealProgress() {
+      setReadoutStepState(readoutSteps[0], "complete");
+      setReadoutStepState(readoutSteps[1], "complete");
+      setReadoutStepState(readoutSteps[2], "failed");
+      setScanStatus("failed");
+      if (!progressBar) return;
+      progressBar.style.animation = "none";
+      progressBar.style.transition = "background .16s ease, box-shadow .16s ease";
+      progressBar.style.transform = "scaleX(1)";
+      progressBar.style.background = "linear-gradient(90deg, var(--danger), #ff7a4f)";
+      progressBar.style.boxShadow = "0 0 26px rgba(255,63,63,.62)";
     }
 
     function beep(at, freq, duration, gain = 0.08, type = "square", destination = null) {
@@ -3074,13 +3161,14 @@
       waitForCriticalAssets().catch(() => {});
       if (activeRun !== runId) return;
 
-      resetReadoutState();
       setArmed(true);
+      startScanSealProgress(stampDuration);
       playScannerZoomSound();
       soundUnlock.then(() => {
         if (activeRun === runId && document.body.dataset.armed === "true") playScannerZoomSound();
       }).catch(() => {});
       if (!await wait(stampDuration, runId)) return;
+      failScanSealProgress();
       playFailureSequence(runId);
     }
 
