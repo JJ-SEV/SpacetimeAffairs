@@ -1279,6 +1279,99 @@ def flight_loading_page(submission_id: str) -> bytes:
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None or not row["png_filename"]:
         return destination_page("没找到这个飞行纪录。")
+    preview_token = quote(str(row["generated_at"] or row["id"]))
+    record_src = f"/animation-preview?id={esc(row['id'])}&v={preview_token}"
+    prepare_url = f"/flight/prepare?id={esc(row['id'])}"
+    sign_url = f"/flight/sign?id={esc(row['id'])}&prepared=1"
+    body = f"""
+<main class="flight-sign-prep-shell">
+  <section class="flight-sign-prep-panel" aria-live="polite">
+    <p class="eyebrow">MISSION DEPLOYMENT</p>
+    <h1>签发飞行纪录</h1>
+    <div class="flight-sign-prep-steps" data-flight-prep-steps>
+      <span data-prep-step>
+        <b>01 / ROUTE LOCK</b>
+        <i><em></em></i>
+      </span>
+      <span data-prep-step>
+        <b>02 / RECORD BUILD</b>
+        <i><em></em></i>
+      </span>
+    </div>
+    <p class="flight-sign-prep-status" data-prep-status>正在锁定任务目标与写入飞行日志</p>
+    <img class="flight-sign-prep-probe" src="{record_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true">
+  </section>
+</main>
+<script>
+(() => {{
+  const prepareUrl = "{prepare_url}";
+  const signUrl = "{sign_url}";
+  const steps = Array.from(document.querySelectorAll("[data-prep-step]"));
+  const status = document.querySelector("[data-prep-status]");
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const prepare = fetch(prepareUrl, {{
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {{"Accept": "application/json"}}
+  }}).then((response) => {{
+    if (!response.ok) throw new Error("prepare failed");
+    return response.json();
+  }}).catch(() => null);
+
+  function beginStep(step, duration, target = 1) {{
+    if (!step) return;
+    const bar = step.querySelector("em");
+    step.classList.remove("is-complete");
+    step.classList.add("is-active");
+    if (!bar) return;
+    bar.style.transition = "none";
+    bar.style.transform = "scaleX(0)";
+    bar.getBoundingClientRect();
+    bar.style.transition = `transform ${{duration}}ms cubic-bezier(.2,.76,.18,1)`;
+    bar.style.transform = `scaleX(${{target}})`;
+  }}
+
+  async function completeStep(index, duration, waitForReady = null) {{
+    const step = steps[index];
+    if (!step) return;
+    beginStep(step, duration, waitForReady ? .88 : 1);
+    if (waitForReady) {{
+      await Promise.all([sleep(duration), waitForReady]);
+      const bar = step.querySelector("em");
+      if (bar) {{
+        bar.style.transition = "transform 260ms cubic-bezier(.2,.76,.18,1)";
+        bar.style.transform = "scaleX(1)";
+      }}
+      await sleep(280);
+    }} else {{
+      await sleep(duration);
+    }}
+    step.classList.remove("is-active");
+    step.classList.add("is-complete");
+  }}
+
+  async function run() {{
+    const ready = Promise.race([prepare, sleep(5200)]);
+    await completeStep(0, 920);
+    if (status) status.textContent = "正在写入任务目标、坐标与飞行日志";
+    await completeStep(1, 1180, ready);
+    if (status) status.textContent = "飞行纪录已装载";
+    fetch(signUrl, {{cache: "no-store", credentials: "same-origin"}}).catch(() => null);
+    await sleep(260);
+    window.location.replace(signUrl);
+  }}
+
+  run();
+}})();
+</script>
+"""
+    return auth_layout("签发飞行纪录", body)
+
+
+def flight_sign_page(submission_id: str) -> bytes:
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None or not row["png_filename"]:
+        return destination_page("没找到这个飞行纪录。")
     warm_animation_preview(row["id"])
     if not STAMP_ANIMATION_TEMPLATE_PATH.exists():
         return flight_loading_fallback_page(submission_id)
@@ -1305,6 +1398,14 @@ def flight_loading_page(submission_id: str) -> bytes:
         f'window.location.href = "{redirect_to}";',
     )
     return page.encode("utf-8")
+
+
+def flight_prepare_payload(submission_id: str) -> dict[str, object]:
+    row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+    if row is None or not row["png_filename"]:
+        return {"ok": False, "error": "not_found"}
+    warm_animation_preview(row["id"])
+    return {"ok": True, "signUrl": f"/flight/sign?id={row['id']}&prepared=1"}
 
 
 def record_preview_page(submission_id: str) -> bytes:
@@ -2257,6 +2358,15 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if not self.require_player():
                 return
             self.send_html(flight_loading_page(normalize_submission_id(qs.get("id", [""])[0])))
+        elif parsed.path == "/flight/prepare":
+            if not self.require_player():
+                return
+            payload = flight_prepare_payload(normalize_submission_id(qs.get("id", [""])[0]))
+            self.send_json(payload, 200 if payload.get("ok") else 404)
+        elif parsed.path == "/flight/sign":
+            if not self.require_player():
+                return
+            self.send_html(flight_sign_page(normalize_submission_id(qs.get("id", [""])[0])))
         elif parsed.path == "/flight/confirm":
             if not self.require_player():
                 return

@@ -2516,6 +2516,20 @@
       }
     }
 
+    function setStartupChecklistComplete() {
+      resetReadoutState();
+      setReadoutStepState(readoutSteps[0], "complete");
+      setReadoutStepState(readoutSteps[1], "complete");
+      setReadoutStepState(readoutSteps[2], "");
+      if (progressBar) {
+        progressBar.style.animation = "none";
+        progressBar.style.transition = "none";
+        progressBar.style.transform = "scaleX(1)";
+        progressBar.style.background = "linear-gradient(90deg, var(--mint), #d9fff0)";
+        progressBar.style.boxShadow = "0 0 24px rgba(130,255,210,.6)";
+      }
+    }
+
     function startScanSealProgress(duration = stampDuration) {
       setReadoutStepState(readoutSteps[0], "complete");
       setReadoutStepState(readoutSteps[1], "complete");
@@ -3131,6 +3145,13 @@
       setPhase("preloading");
       if (signalAudio) signalAudio.load();
       const assetsReady = waitForCriticalAssets().catch(() => {});
+      if (params.get("prepared") === "1") {
+        setStartupChecklistComplete();
+        await Promise.race([assetsReady, sleep(900)]);
+        setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
+        showAudioChoice();
+        return;
+      }
       const checklist = runStartupChecklist();
       if (params.get("autostart") === "skip") {
         await checklist;

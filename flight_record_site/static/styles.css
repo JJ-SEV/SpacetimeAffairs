@@ -1229,6 +1229,117 @@ button.danger {
   animation-delay: 1s;
 }
 
+.flight-sign-prep-shell {
+  min-height: 100svh;
+  display: grid;
+  align-items: start;
+  padding: clamp(18px, 5vw, 48px);
+}
+
+.flight-sign-prep-panel {
+  position: relative;
+  overflow: hidden;
+  width: min(760px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  padding: clamp(28px, 6vw, 44px);
+  border: 1px solid rgba(103, 199, 239, 0.4);
+  border-top-color: rgba(231, 180, 92, 0.42);
+  background:
+    linear-gradient(135deg, rgba(7, 28, 31, 0.94), rgba(5, 18, 25, 0.88)),
+    rgba(2, 8, 13, 0.9);
+  box-shadow: 0 34px 92px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.flight-sign-prep-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(103, 199, 239, 0.08), transparent 32%, rgba(128, 227, 188, 0.1)),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(103, 199, 239, 0.05) 32px);
+}
+
+.flight-sign-prep-panel > * {
+  position: relative;
+}
+
+.flight-sign-prep-panel h1 {
+  margin: 0 0 4px;
+  color: #f7fff8;
+  font-family: "Times New Roman", serif;
+  font-size: clamp(42px, 10vw, 66px);
+  line-height: 1;
+}
+
+.flight-sign-prep-steps {
+  display: grid;
+  gap: 14px;
+}
+
+.flight-sign-prep-steps span {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(103, 199, 239, 0.34);
+  background: rgba(2, 8, 13, 0.58);
+  color: rgba(213, 228, 229, 0.78);
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.flight-sign-prep-steps span.is-active {
+  border-color: rgba(231, 180, 92, 0.56);
+  background: rgba(31, 24, 13, 0.58);
+  color: var(--gold);
+}
+
+.flight-sign-prep-steps span.is-complete {
+  border-color: rgba(128, 227, 188, 0.58);
+  background: rgba(10, 32, 27, 0.62);
+  color: var(--green);
+}
+
+.flight-sign-prep-steps b {
+  color: inherit;
+  font-size: 13px;
+}
+
+.flight-sign-prep-steps i {
+  position: relative;
+  overflow: hidden;
+  height: 6px;
+  border: 1px solid rgba(103, 199, 239, 0.26);
+  background: rgba(2, 8, 13, 0.74);
+}
+
+.flight-sign-prep-steps em {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  box-shadow: 0 0 20px rgba(128, 227, 188, 0.48);
+}
+
+.flight-sign-prep-status {
+  margin: 0;
+  min-height: 24px;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.flight-sign-prep-probe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .commit-row {
   display: flex;
   align-items: center;
@@ -2189,6 +2300,24 @@ dd {
     font-size: 34px;
   }
 
+  .flight-sign-prep-shell {
+    padding: 0;
+  }
+
+  .flight-sign-prep-panel {
+    min-height: 100svh;
+    padding: 28px 18px;
+    align-content: center;
+  }
+
+  .flight-sign-prep-panel h1 {
+    font-size: 42px;
+  }
+
+  .flight-sign-prep-status {
+    font-size: 16px;
+  }
+
   .digit-rack {
     gap: 5px;
   }
@@ -2224,7 +2353,8 @@ dd {
   .loading-ring,
   .loading-bar span,
   .flight-confirm-loading-steps span,
-  .flight-confirm-loading-steps i::before {
+  .flight-confirm-loading-steps i::before,
+  .flight-sign-prep-steps em {
     animation: none;
   }
 }
