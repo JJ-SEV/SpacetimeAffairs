@@ -2061,7 +2061,7 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
   }}
   function birthdayStatus(value) {{
     if (!/^(19|20)\\d{{6}}$/.test(value)) {{
-      return {{ valid: false, adult: false, message: "密码为8位生日数字。" }};
+      return {{ valid: false, adult: false, message: "密码不正确。" }};
     }}
     const year = Number(value.slice(0, 4));
     const month = Number(value.slice(4, 6));
@@ -2072,11 +2072,11 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       parsed.getUTCMonth() === month - 1 &&
       parsed.getUTCDate() === day;
     if (!valid) {{
-      return {{ valid: false, adult: false, message: "生日日期无效。" }};
+      return {{ valid: false, adult: false, message: "密码不正确。" }};
     }}
     const birthIso = `${{value.slice(0, 4)}}-${{value.slice(4, 6)}}-${{value.slice(6, 8)}}`;
     if (birthIso > adultBirthdateCutoff) {{
-      return {{ valid: true, adult: false, message: "未满18周岁无法登录。" }};
+      return {{ valid: true, adult: false, message: "密码不正确。" }};
     }}
     return {{ valid: true, adult: true, message: "" }};
   }}
@@ -3060,10 +3060,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 return
             birthdate = parse_birthday_password(password)
             if birthdate is None:
-                self.send_html(player_gate_page("密码不正确，密码为8位生日数字。", password_hint_attempt=True), 403)
+                self.send_html(player_gate_page("密码不正确，密码为8位数字。", password_hint_attempt=True), 403)
                 return
             if birthdate > adult_birthdate_cutoff():
-                self.send_html(player_gate_page("未满18周岁无法登录。"), 403)
+                self.send_html(player_gate_page("密码不正确，密码为8位数字。", password_hint_attempt=True), 403)
                 return
             self.redirect(
                 "/",
