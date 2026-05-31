@@ -2022,11 +2022,11 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       <form class="auth-card" action="/gate" method="post">
         <div class="auth-state">SYNC 0/8</div>
         <label class="pilot-id-label">PILOT ID
-          <input name="pilot_id" class="auth-input pilot-id-input" inputmode="email" pattern="[A-Za-z]*" maxlength="16" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" lang="en" required>
+          <input name="pilot_id" class="auth-input pilot-id-input" inputmode="email" pattern="[A-Za-z]*" maxlength="16" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" lang="en" placeholder="请输入飞行员姓名（拼音/英文）" required>
           <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
         <label>密码
-          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="off" required>
+          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="off" placeholder="请输入8位数密码" required>
           <span class="pilot-id-hint password-age-hint" aria-live="polite"></span>
         </label>
         <div class="digit-rack" aria-hidden="true">
