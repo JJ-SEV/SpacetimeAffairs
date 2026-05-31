@@ -123,20 +123,6 @@ body.auth-body::after {
   }
 }
 
-@keyframes confirmLoadFill {
-  to {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes confirmStepComplete {
-  to {
-    border-color: rgba(128, 227, 188, 0.54);
-    background: rgba(10, 32, 27, 0.62);
-    color: var(--green);
-  }
-}
-
 @keyframes loadingBlink {
   0%,
   100% {
@@ -1124,111 +1110,6 @@ button.danger {
   margin-top: 16px;
 }
 
-.flight-confirm-loading[hidden] {
-  display: none;
-}
-
-.flight-confirm-loading {
-  position: fixed;
-  z-index: 90;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background:
-    linear-gradient(135deg, rgba(4, 12, 18, 0.94), rgba(2, 8, 13, 0.88)),
-    rgba(2, 8, 13, 0.9);
-}
-
-.flight-confirm-loading-panel {
-  position: relative;
-  overflow: hidden;
-  width: min(560px, 100%);
-  display: grid;
-  gap: 16px;
-  padding: 28px;
-  border: 1px solid rgba(103, 199, 239, 0.38);
-  border-radius: 8px;
-  background: rgba(5, 16, 24, 0.88);
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.flight-confirm-loading-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(103, 199, 239, 0.08), transparent 32%, rgba(128, 227, 188, 0.1)),
-    repeating-linear-gradient(0deg, transparent 0 31px, rgba(103, 199, 239, 0.05) 32px);
-}
-
-.flight-confirm-loading-panel > * {
-  position: relative;
-}
-
-.flight-confirm-loading-panel h3 {
-  margin: 0;
-  color: #f7fff8;
-  font-family: "Times New Roman", serif;
-  font-size: clamp(30px, 8vw, 46px);
-  line-height: 1.05;
-}
-
-.flight-confirm-loading-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.flight-confirm-loading-steps {
-  display: grid;
-  gap: 12px;
-}
-
-.flight-confirm-loading-steps span {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid rgba(103, 199, 239, 0.28);
-  background: rgba(2, 8, 13, 0.58);
-  color: rgba(213, 228, 229, 0.78);
-  animation: confirmStepComplete .16s ease forwards;
-  animation-delay: 1.04s;
-}
-
-.flight-confirm-loading-steps span:nth-child(2) {
-  animation-delay: 2.04s;
-}
-
-.flight-confirm-loading-steps b {
-  color: inherit;
-  font-size: 12px;
-}
-
-.flight-confirm-loading-steps i {
-  position: relative;
-  overflow: hidden;
-  height: 6px;
-  background: rgba(2, 8, 13, 0.74);
-  border: 1px solid rgba(103, 199, 239, 0.24);
-}
-
-.flight-confirm-loading-steps i::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: linear-gradient(90deg, var(--blue), var(--green));
-  box-shadow: 0 0 18px rgba(128, 227, 188, 0.44);
-  animation: confirmLoadFill 1s cubic-bezier(0.2, 0.76, 0.18, 1) forwards;
-}
-
-.flight-confirm-loading-steps span:nth-child(2) i::before {
-  animation-delay: 1s;
-}
-
 .flight-sign-prep-shell {
   min-height: 100svh;
   display: grid;
@@ -1338,6 +1219,52 @@ button.danger {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.flight-prep-ready-gate[hidden] {
+  display: none;
+}
+
+.flight-prep-ready-gate {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(2, 8, 13, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.flight-prep-ready-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 26px;
+  border: 1px solid rgba(128, 227, 188, 0.46);
+  border-radius: 8px;
+  background: rgba(5, 16, 24, 0.94);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.flight-prep-ready-card h2 {
+  margin: 0;
+  color: #f7fff8;
+  font-family: "Times New Roman", serif;
+  font-size: clamp(30px, 8vw, 44px);
+  line-height: 1.05;
+}
+
+.flight-prep-ready-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.flight-prep-ready-card button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 4px;
 }
 
 .commit-row {
@@ -2352,8 +2279,6 @@ dd {
   .loading-grid span,
   .loading-ring,
   .loading-bar span,
-  .flight-confirm-loading-steps span,
-  .flight-confirm-loading-steps i::before,
   .flight-sign-prep-steps em {
     animation: none;
   }

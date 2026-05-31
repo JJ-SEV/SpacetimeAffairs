@@ -2184,7 +2184,7 @@
     const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
     const readoutSteps = Array.from(document.querySelectorAll("[data-load-step]"));
     const progressBar = document.querySelector("[data-progress-bar]");
-    const criticalImages = Array.from(document.querySelectorAll(".record"));
+    const criticalImages = Array.from(document.querySelectorAll(".record, .stamp-mark, .scanner-device, .error-plate, .blackbox-bg, .access-gate-bg"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
     const stampDuration = 6500;
@@ -2256,9 +2256,31 @@
       });
     }
 
+    function waitForMediaReady(audio) {
+      if (!audio) return Promise.resolve();
+      if (audio.readyState >= 2) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          audio.removeEventListener("loadeddata", done);
+          audio.removeEventListener("canplaythrough", done);
+          audio.removeEventListener("error", done);
+          resolve();
+        };
+        const timer = setTimeout(done, 2600);
+        audio.addEventListener("loadeddata", done, { once: true });
+        audio.addEventListener("canplaythrough", done, { once: true });
+        audio.addEventListener("error", done, { once: true });
+        try { audio.load(); } catch (_) {}
+      });
+    }
+
     function waitForCriticalAssets() {
       if (!criticalAssetsReady) {
-        criticalAssetsReady = Promise.all(criticalImages.map(waitForImageReady));
+        criticalAssetsReady = Promise.all([
+          ...criticalImages.map(waitForImageReady),
+          ...mediaElements.map(waitForMediaReady)
+        ]);
       }
       return criticalAssetsReady;
     }
@@ -2972,13 +2994,14 @@
 
     async function unlockSound() {
       let contextReady = false;
+      let errorBufferReady = Promise.resolve(null);
       const mediaWarmup = Promise.all(primeMediaElements.map(primeMedia)).then((results) => {
         if (results.some(Boolean)) soundReady = true;
         return soundReady;
       });
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        loadErrorPromptBuffer();
+        errorBufferReady = loadErrorPromptBuffer();
         const resumed = audioCtx.resume();
         if (resumed && typeof resumed.then === "function") await resumed;
         contextReady = audioCtx.state === "running";
@@ -2986,6 +3009,7 @@
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
       }
       if (contextReady) {
+        await Promise.race([errorBufferReady, sleep(720)]);
         soundReady = true;
         mediaWarmup.catch(() => {});
         return true;
@@ -3147,7 +3171,7 @@
       const assetsReady = waitForCriticalAssets().catch(() => {});
       if (params.get("prepared") === "1") {
         setStartupChecklistComplete();
-        await Promise.race([assetsReady, sleep(900)]);
+        await assetsReady;
         setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
         showAudioChoice();
         return;
@@ -3169,7 +3193,6 @@
       clearSequenceTimers();
       activeRun += 1;
       const runId = activeRun;
-      setPhase("");
       setStatic(false);
       setArmed(false);
       jumped = false;
@@ -3179,9 +3202,15 @@
       setBlackboxControls(false);
 
       const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
-      waitForCriticalAssets().catch(() => {});
+      const assetsReady = waitForCriticalAssets().catch(() => {});
+      if (enableAudio) {
+        setGateContent("签发模组启动中", "正在解锁警报与黑匣音频", "Unlocking audio", false);
+        await Promise.race([soundUnlock, sleep(1400)]);
+      }
+      await Promise.race([assetsReady, sleep(1400)]);
       if (activeRun !== runId) return;
 
+      setPhase("");
       setArmed(true);
       startScanSealProgress(stampDuration);
       playScannerZoomSound();

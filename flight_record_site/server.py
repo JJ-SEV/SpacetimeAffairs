@@ -1203,39 +1203,12 @@ def flight_confirm_page(submission_id: str) -> bytes:
   <div class="screen-warning simple-warning">
     <span>请截图保存编号</span>
   </div>
-  <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post" data-flight-confirm-form>
+  <form class="confirm-actions flight-confirm-actions" action="/flight/confirm" method="post">
     <input type="hidden" name="id" value="{esc(row['id'])}">
     <button class="confirm-button" type="submit">确认</button>
   </form>
-  <div class="flight-confirm-loading" data-flight-confirm-loading hidden aria-hidden="true">
-    <section class="flight-confirm-loading-panel" aria-live="polite">
-      <p class="eyebrow">MISSION DEPLOYMENT</p>
-      <h3>签发飞行纪录</h3>
-      <div class="flight-confirm-loading-steps" aria-hidden="true">
-        <span><b>01 / ROUTE LOCK</b><i></i></span>
-        <span><b>02 / RECORD BUILD</b><i></i></span>
-      </div>
-      <p>正在锁定任务目标与写入飞行日志</p>
-    </section>
-  </div>
   <img src="{animation_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true" class="preload-probe">
 </section>
-<script>
-(() => {{
-  const form = document.querySelector("[data-flight-confirm-form]");
-  const overlay = document.querySelector("[data-flight-confirm-loading]");
-  if (!form || !overlay) return;
-  form.addEventListener("submit", () => {{
-    overlay.hidden = false;
-    overlay.setAttribute("aria-hidden", "false");
-    const button = form.querySelector("button");
-    if (button) {{
-      button.disabled = true;
-      button.textContent = "签发中";
-    }}
-  }});
-}})();
-</script>
 """
     return layout("飞行纪录预览", body, body_class="home-body")
 
@@ -1283,6 +1256,22 @@ def flight_loading_page(submission_id: str) -> bytes:
     record_src = f"/animation-preview?id={esc(row['id'])}&v={preview_token}"
     prepare_url = f"/flight/prepare?id={esc(row['id'])}"
     sign_url = f"/flight/sign?id={esc(row['id'])}&prepared=1"
+    sign_image_assets = [
+        record_src,
+        "/static/stamp-animation/assets/emboss-stamp-mark-web.png",
+        "/static/stamp-animation/assets/ai-scanner-module-v1.png",
+        "/static/stamp-animation/assets/ai-error-chamber-orange-blue-v1.png",
+        "/static/stamp-animation/assets/ai-blackbox-code-glitch-bg-v1.png",
+        "/static/stamp-animation/assets/ai-access-gate-v1.png",
+    ]
+    sign_audio_assets = [
+        "/static/stamp-animation/assets/xia-yizhou-signal.m4a?v=ce6de9d9v3",
+        "/static/stamp-animation/assets/error-background-loop-080a2fe3.m4a?v=080a2fe3",
+        "/static/stamp-animation/assets/alarm-sound.m4a",
+        "/static/stamp-animation/assets/error-prompt-stutter-v3.m4a",
+        "/static/stamp-animation/assets/access-granted-system.m4a?v=zarvox1",
+        "/static/stamp-animation/assets/electric-glitch.m4a",
+    ]
     body = f"""
 <main class="flight-sign-prep-shell">
   <section class="flight-sign-prep-panel" aria-live="polite">
@@ -1301,13 +1290,25 @@ def flight_loading_page(submission_id: str) -> bytes:
     <p class="flight-sign-prep-status" data-prep-status>正在锁定任务目标与写入飞行日志</p>
     <img class="flight-sign-prep-probe" src="{record_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true">
   </section>
+  <div class="flight-prep-ready-gate" data-prep-ready hidden aria-hidden="true">
+    <section class="flight-prep-ready-card" role="dialog" aria-modal="true" aria-labelledby="flight-prep-ready-title">
+      <p class="eyebrow">MISSION DEPLOYMENT</p>
+      <h2 id="flight-prep-ready-title">飞行纪录已装载</h2>
+      <p>签发模组、飞行纪录图与黑匣音频已就绪。</p>
+      <button type="button" data-enter-sign>启动签发</button>
+    </section>
+  </div>
 </main>
 <script>
 (() => {{
-  const prepareUrl = "{prepare_url}";
-  const signUrl = "{sign_url}";
+  const prepareUrl = {json.dumps(prepare_url, ensure_ascii=False)};
+  const signUrl = {json.dumps(sign_url, ensure_ascii=False)};
+  const imageAssets = {json.dumps(sign_image_assets, ensure_ascii=False)};
+  const audioAssets = {json.dumps(sign_audio_assets, ensure_ascii=False)};
   const steps = Array.from(document.querySelectorAll("[data-prep-step]"));
   const status = document.querySelector("[data-prep-status]");
+  const readyGate = document.querySelector("[data-prep-ready]");
+  const enterButton = document.querySelector("[data-enter-sign]");
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const prepare = fetch(prepareUrl, {{
     cache: "no-store",
@@ -1317,6 +1318,46 @@ def flight_loading_page(submission_id: str) -> bytes:
     if (!response.ok) throw new Error("prepare failed");
     return response.json();
   }}).catch(() => null);
+
+  function preloadImage(src) {{
+    return new Promise((resolve, reject) => {{
+      const image = new Image();
+      image.decoding = "async";
+      image.onload = async () => {{
+        if (image.decode) {{
+          try {{ await image.decode(); }} catch (_) {{}}
+        }}
+        resolve(src);
+      }};
+      image.onerror = () => reject(new Error(src));
+      image.src = src;
+    }});
+  }}
+
+  async function preloadFetch(src) {{
+    const response = await fetch(src, {{cache: "force-cache", credentials: "same-origin"}});
+    if (!response.ok) throw new Error(src);
+    await response.blob();
+    return src;
+  }}
+
+  function preloadSignPage() {{
+    return fetch(signUrl, {{
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {{"Accept": "text/html"}}
+    }}).then((response) => {{
+      if (!response.ok) throw new Error("sign page failed");
+      return response.text();
+    }});
+  }}
+
+  const assetsReady = Promise.allSettled([
+    prepare,
+    preloadSignPage(),
+    ...imageAssets.map(preloadImage),
+    ...audioAssets.map(preloadFetch)
+  ]);
 
   function beginStep(step, duration, target = 1) {{
     if (!step) return;
@@ -1351,14 +1392,26 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}
 
   async function run() {{
-    const ready = Promise.race([prepare, sleep(5200)]);
+    const ready = Promise.race([assetsReady, sleep(7600)]);
     await completeStep(0, 920);
     if (status) status.textContent = "正在写入任务目标、坐标与飞行日志";
     await completeStep(1, 1180, ready);
-    if (status) status.textContent = "飞行纪录已装载";
-    fetch(signUrl, {{cache: "no-store", credentials: "same-origin"}}).catch(() => null);
-    await sleep(260);
-    window.location.replace(signUrl);
+    await assetsReady.catch(() => null);
+    if (status) status.textContent = "飞行纪录已装载，等待确认部署";
+    if (readyGate) {{
+      readyGate.hidden = false;
+      readyGate.setAttribute("aria-hidden", "false");
+    }}
+    if (enterButton) enterButton.focus();
+  }}
+
+  if (enterButton) {{
+    enterButton.addEventListener("click", () => {{
+      enterButton.disabled = true;
+      enterButton.textContent = "进入签发";
+      if (status) status.textContent = "正在进入签发页面";
+      window.location.href = signUrl;
+    }});
   }}
 
   run();
@@ -2258,12 +2311,17 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.end_headers()
 
-    def send_file_headers(self, path: Path, download_name: str | None = None) -> None:
+    def send_file_headers(
+        self,
+        path: Path,
+        download_name: str | None = None,
+        cache_control: str = "no-store",
+    ) -> None:
         ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(path.stat().st_size))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache_control)
         if download_name:
             fallback_name = "".join(
                 ch if 32 <= ord(ch) < 127 and ch not in {'"', "\\", ";"} else "_"
@@ -2321,19 +2379,29 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             return "player"
         return "admin" if self.is_admin() else "unknown"
 
-    def serve_path(self, path: Path, download_name: str | None = None) -> None:
+    def serve_path(
+        self,
+        path: Path,
+        download_name: str | None = None,
+        cache_control: str = "no-store",
+    ) -> None:
         if not path.exists() or not path.is_file():
             self.send_error(404)
             return
-        self.send_file_headers(path, download_name)
+        self.send_file_headers(path, download_name, cache_control)
         with path.open("rb") as f:
             shutil.copyfileobj(f, self.wfile)
 
-    def serve_path_head(self, path: Path, download_name: str | None = None) -> None:
+    def serve_path_head(
+        self,
+        path: Path,
+        download_name: str | None = None,
+        cache_control: str = "no-store",
+    ) -> None:
         if not path.exists() or not path.is_file():
             self.send_error(404)
             return
-        self.send_file_headers(path, download_name)
+        self.send_file_headers(path, download_name, cache_control)
 
     def parse_urlencoded(self) -> dict[str, str]:
         length = int(self.headers.get("Content-Length", "0"))
@@ -2445,7 +2513,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if animation_path is None:
                 self.send_error(404)
                 return
-            self.serve_path(animation_path)
+            self.serve_path(animation_path, cache_control="public, max-age=300")
         elif parsed.path == "/preview":
             if not self.require_player_or_admin():
                 return
@@ -2581,7 +2649,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             self.send_json({"items": address_suggestions(query[:80])})
         elif parsed.path.startswith("/static/"):
             rel = parsed.path.removeprefix("/static/")
-            self.serve_path(APP_ROOT / "static" / rel)
+            cache_control = "no-store"
+            if rel.startswith("stamp-animation/assets/"):
+                cache_control = "public, max-age=31536000, immutable"
+            self.serve_path(APP_ROOT / "static" / rel, cache_control=cache_control)
         else:
             self.send_error(404)
 
@@ -2603,7 +2674,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
             if animation_path is None:
                 self.send_error(404)
                 return
-            self.serve_path_head(animation_path)
+            self.serve_path_head(animation_path, cache_control="public, max-age=300")
         elif parsed.path == "/preview":
             if not self.require_player_or_admin():
                 return
@@ -2716,7 +2787,10 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
         elif parsed.path.startswith("/static/"):
             rel = parsed.path.removeprefix("/static/")
-            self.serve_path_head(APP_ROOT / "static" / rel)
+            cache_control = "no-store"
+            if rel.startswith("stamp-animation/assets/"):
+                cache_control = "public, max-age=31536000, immutable"
+            self.serve_path_head(APP_ROOT / "static" / rel, cache_control=cache_control)
         else:
             self.send_error(404)
 
