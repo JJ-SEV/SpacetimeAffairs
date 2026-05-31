@@ -1311,6 +1311,7 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}));
   const progressBuckets = [[], []];
   let signMarkup = "";
+  const preparedImageUrls = new Map();
   let etaDeadline = null;
   let visiblePhase = 0;
   const startedAt = performance.now();
@@ -1401,6 +1402,11 @@ def flight_loading_page(submission_id: str) -> bytes:
     }}
   }}
 
+  function showPrepFailure() {{
+    if (status) status.textContent = "模组启动失败，请检查网络后重试";
+    if (eta) eta.textContent = "系统未能完成部署准备";
+  }}
+
   function withTimeout(promise, ms) {{
     return new Promise((resolve, reject) => {{
       const timer = setTimeout(() => reject(new Error("preload timeout")), ms);
@@ -1476,6 +1482,10 @@ def flight_loading_page(submission_id: str) -> bytes:
     if (!ok) throw new Error(src);
   }}
 
+  function replaceAllText(text, search, replacement) {{
+    return text.split(search).join(replacement);
+  }}
+
   function cacheBustedUrl(src, attempt) {{
     try {{
       const url = new URL(src, window.location.href);
@@ -1491,11 +1501,20 @@ def flight_loading_page(submission_id: str) -> bytes:
     for (let attempt = 0; attempt < 3; attempt += 1) {{
       const target = attempt ? cacheBustedUrl(src, attempt) : src;
       try {{
-        await fetchBlobWithProgress(target, {{cache: attempt ? "no-store" : "force-cache", credentials: "same-origin"}}, (value) => {{
+        const blob = await fetchBlobWithProgress(target, {{cache: attempt ? "no-store" : "force-cache", credentials: "same-origin"}}, (value) => {{
           progress(Math.max(.02, value * .86));
         }});
         progress(.9);
-        await decodeImage(target);
+        const objectUrl = URL.createObjectURL(blob);
+        try {{
+          await decodeImage(objectUrl);
+        }} catch (error) {{
+          URL.revokeObjectURL(objectUrl);
+          throw error;
+        }}
+        const previousUrl = preparedImageUrls.get(src);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        preparedImageUrls.set(src, objectUrl);
         progress(1);
         return;
       }} catch (error) {{
@@ -1514,16 +1533,19 @@ def flight_loading_page(submission_id: str) -> bytes:
   function runTrackedTask(asset, phase, index) {{
     updateTaskProgress(phase, index, .01);
     return withTimeout(asset.run((value) => updateTaskProgress(phase, index, value)), 22000)
-      .catch(() => null)
       .then(() => updateTaskProgress(phase, index, 1));
   }}
 
   function enterSignPage() {{
     if (signMarkup.trim()) {{
       try {{
+        let preparedMarkup = signMarkup;
+        preparedImageUrls.forEach((objectUrl, src) => {{
+          preparedMarkup = replaceAllText(preparedMarkup, src, objectUrl);
+        }});
         history.replaceState(null, "", signUrl);
         document.open();
-        document.write(signMarkup);
+        document.write(preparedMarkup);
         document.close();
         return;
       }} catch (_) {{
@@ -1552,7 +1574,13 @@ def flight_loading_page(submission_id: str) -> bytes:
     const routeStartedAt = performance.now();
     const routeReady = Promise.all(routeAssets.map((asset, index) => runTrackedTask(asset, 0, index)));
     const buildReady = Promise.all(buildAssets.map((asset, index) => runTrackedTask(asset, 1, index)));
-    await routeReady;
+    try {{
+      await routeReady;
+    }} catch (error) {{
+      clearInterval(etaTimer);
+      showPrepFailure();
+      return;
+    }}
     if (performance.now() - routeStartedAt < 700) {{
       await sleep(700 - (performance.now() - routeStartedAt));
     }}
@@ -1562,7 +1590,13 @@ def flight_loading_page(submission_id: str) -> bytes:
     setStepProgress(1, Math.min(phaseProgress(1), .08));
     await sleep(120);
     setStepProgress(1, phaseProgress(1));
-    await buildReady;
+    try {{
+      await buildReady;
+    }} catch (error) {{
+      clearInterval(etaTimer);
+      showPrepFailure();
+      return;
+    }}
     if (performance.now() - buildStartedAt < 900) {{
       await sleep(900 - (performance.now() - buildStartedAt));
     }}

@@ -2299,6 +2299,9 @@
     function cacheBustedUrl(src) {
       try {
         const url = new URL(src, window.location.href);
+        if (url.protocol === "blob:") {
+          return src;
+        }
         url.searchParams.set("visualRetry", Date.now().toString());
         return url.toString();
       } catch (_) {
