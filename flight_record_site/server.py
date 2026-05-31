@@ -1308,7 +1308,8 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}));
   const progressBuckets = [[], []];
   let signMarkup = "";
-  let lastEtaSeconds = null;
+  let etaDeadline = null;
+  let visiblePhase = 0;
   const startedAt = performance.now();
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1337,27 +1338,34 @@ def flight_loading_page(submission_id: str) -> bytes:
       eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
       return;
     }}
-    const elapsedSeconds = Math.max(.8, (performance.now() - startedAt) / 1000);
-    let secondsLeft = Math.ceil((elapsedSeconds / progress) * (1 - progress));
-    if (!Number.isFinite(secondsLeft)) {{
+    const now = performance.now();
+    const elapsedSeconds = Math.max(.8, (now - startedAt) / 1000);
+    const bufferSeconds = progress < .55 ? 10 : progress < .85 ? 7 : 5;
+    const estimatedSeconds = Math.ceil((elapsedSeconds / progress) * (1 - progress)) + bufferSeconds;
+    if (!Number.isFinite(estimatedSeconds)) {{
       eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
       return;
     }}
-    secondsLeft = Math.min(90, Math.max(2, secondsLeft));
-    if (lastEtaSeconds !== null) {{
-      secondsLeft = Math.ceil((lastEtaSeconds * .64) + (secondsLeft * .36));
+    if (etaDeadline === null) {{
+      const secondsLeft = Math.min(120, Math.max(6, estimatedSeconds));
+      etaDeadline = now + secondsLeft * 1000;
     }}
-    lastEtaSeconds = secondsLeft;
+    const secondsLeft = Math.ceil((etaDeadline - now) / 1000);
+    if (secondsLeft <= 0) {{
+      eta.textContent = "系统正在完成最终校验";
+      return;
+    }}
     eta.textContent = "系统加载中，预计部署完成时间还有：" + secondsLeft + " 秒";
   }}
 
   function updateStatus() {{
     if (!status) return;
-    const overall = Math.round(overallProgress() * 100);
-    if (overall < 45) {{
-      status.textContent = "正在锁定任务目标与返航航道 " + overall + "%";
-    }} else if (overall < 100) {{
-      status.textContent = "正在写入任务目标、坐标与飞行日志 " + overall + "%";
+    const routePercent = Math.round(phaseProgress(0) * 100);
+    const buildPercent = Math.round(phaseProgress(1) * 100);
+    if (visiblePhase === 0) {{
+      status.textContent = "正在锁定任务目标与返航航道 " + routePercent + "%";
+    }} else if (buildPercent < 100) {{
+      status.textContent = "正在写入任务目标、坐标与飞行日志 " + buildPercent + "%";
     }} else {{
       status.textContent = "飞行纪录已装载，正在进入签发页面";
     }}
@@ -1383,7 +1391,11 @@ def flight_loading_page(submission_id: str) -> bytes:
   function updateTaskProgress(phase, index, value) {{
     const bucket = progressBuckets[phase];
     bucket[index] = Math.max(bucket[index] || 0, clamp(value));
-    setStepProgress(phase, phaseProgress(phase));
+    if (phase <= visiblePhase) {{
+      setStepProgress(phase, phaseProgress(phase));
+    }} else {{
+      updateStatus();
+    }}
   }}
 
   function withTimeout(promise, ms) {{
@@ -1534,11 +1546,23 @@ def flight_loading_page(submission_id: str) -> bytes:
     setStepProgress(0, 0);
     setStepProgress(1, 0);
 
+    const routeStartedAt = performance.now();
     const routeReady = Promise.all(routeAssets.map((asset, index) => runTrackedTask(asset, 0, index)));
     const buildReady = Promise.all(buildAssets.map((asset, index) => runTrackedTask(asset, 1, index)));
     await routeReady;
+    if (performance.now() - routeStartedAt < 700) {{
+      await sleep(700 - (performance.now() - routeStartedAt));
+    }}
     setStepProgress(0, 1);
+    visiblePhase = 1;
+    const buildStartedAt = performance.now();
+    setStepProgress(1, Math.min(phaseProgress(1), .08));
+    await sleep(120);
+    setStepProgress(1, phaseProgress(1));
     await buildReady;
+    if (performance.now() - buildStartedAt < 900) {{
+      await sleep(900 - (performance.now() - buildStartedAt));
+    }}
     setStepProgress(1, 1);
     clearInterval(etaTimer);
     updateEta();

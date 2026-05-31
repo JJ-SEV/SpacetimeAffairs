@@ -1160,7 +1160,7 @@ button.danger {
   gap: 14px;
 }
 
-.flight-sign-prep-steps span {
+.flight-sign-prep-steps > span {
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -1170,13 +1170,13 @@ button.danger {
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
-.flight-sign-prep-steps span.is-active {
+.flight-sign-prep-steps > span.is-active {
   border-color: rgba(231, 180, 92, 0.56);
   background: rgba(31, 24, 13, 0.58);
   color: var(--gold);
 }
 
-.flight-sign-prep-steps span.is-complete {
+.flight-sign-prep-steps > span.is-complete {
   border-color: rgba(128, 227, 188, 0.58);
   background: rgba(10, 32, 27, 0.62);
   color: var(--green);
@@ -1213,7 +1213,7 @@ button.danger {
   width: 0;
   background: linear-gradient(90deg, var(--blue), var(--green));
   box-shadow: 0 0 20px rgba(128, 227, 188, 0.48);
-  transition: width 0.18s ease;
+  transition: width 0.48s cubic-bezier(.2,.76,.18,1);
 }
 
 .flight-sign-prep-status {
