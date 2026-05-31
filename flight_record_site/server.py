@@ -1380,7 +1380,7 @@ def flight_loading_page(submission_id: str) -> bytes:
   let signMarkup = "";
   const preparedImageUrls = new Map();
   let etaDeadline = null;
-  let etaProgressAnchor = 0;
+  let etaLastSeconds = null;
   let visiblePhase = 0;
   let preparingToEnter = false;
   const startedAt = performance.now();
@@ -1413,7 +1413,7 @@ def flight_loading_page(submission_id: str) -> bytes:
       return;
     }}
     const now = performance.now();
-    const estimatedSeconds = Math.ceil((1 - progress) * (visiblePhase === 0 ? 18 : 26)) + (visiblePhase === 0 ? 4 : 6);
+    const estimatedSeconds = Math.ceil((1 - progress) * 42) + 8;
     if (!Number.isFinite(estimatedSeconds) || estimatedSeconds <= 0) {{
       eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
       return;
@@ -1421,18 +1421,21 @@ def flight_loading_page(submission_id: str) -> bytes:
     if (etaDeadline === null) {{
       const secondsLeft = Math.min(120, Math.max(6, estimatedSeconds));
       etaDeadline = now + secondsLeft * 1000;
-      etaProgressAnchor = progress;
-    }} else if (progress > etaProgressAnchor + .05) {{
+      etaLastSeconds = secondsLeft;
+    }} else {{
       const currentSeconds = Math.max(2, Math.ceil((etaDeadline - now) / 1000));
       const adjustedSeconds = Math.max(2, Math.min(currentSeconds, estimatedSeconds));
-      etaDeadline = now + adjustedSeconds * 1000;
-      etaProgressAnchor = progress;
-    }} else if (etaDeadline - now < 1500) {{
-      const extensionSeconds = Math.min(30, Math.max(5, estimatedSeconds));
-      etaDeadline = now + extensionSeconds * 1000;
-      etaProgressAnchor = progress;
+      if (adjustedSeconds < currentSeconds) {{
+        etaDeadline = now + adjustedSeconds * 1000;
+      }}
     }}
-    const secondsLeft = Math.max(1, Math.ceil((etaDeadline - now) / 1000));
+    const rawSecondsLeft = Math.ceil((etaDeadline - now) / 1000);
+    if (rawSecondsLeft <= 1) {{
+      eta.textContent = visiblePhase === 0 ? "系统正在锁定航道，请保持当前页面" : "系统正在完成最终校验，请保持当前页面";
+      return;
+    }}
+    const secondsLeft = etaLastSeconds === null ? rawSecondsLeft : Math.min(etaLastSeconds, rawSecondsLeft);
+    etaLastSeconds = secondsLeft;
     eta.textContent = "系统加载中，预计部署完成时间还有：" + secondsLeft + " 秒";
   }}
 
@@ -1652,8 +1655,6 @@ def flight_loading_page(submission_id: str) -> bytes:
       }}
       setStepProgress(0, 1);
       visiblePhase = 1;
-      etaDeadline = null;
-      etaProgressAnchor = .5;
       updateEta();
       const buildStartedAt = performance.now();
       setStepProgress(1, Math.min(phaseProgress(1), .04));
