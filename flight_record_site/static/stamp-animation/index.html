@@ -7,7 +7,7 @@
   <link rel="preload" as="audio" href="assets/xia-yizhou-signal.m4a?v=ce6de9d9v3" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/alarm-sound.m4a" type="audio/mp4">
-  <link rel="preload" as="audio" href="assets/error-prompt-stutter.m4a" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/error-prompt-stutter-v3.m4a" type="audio/mp4">
   <link rel="preload" as="audio" href="assets/electric-glitch.m4a" type="audio/mp4">
   <style>
     :root {
@@ -2021,7 +2021,7 @@
   <audio id="xia-signal" src="assets/xia-yizhou-signal.m4a?v=ce6de9d9v3" preload="auto"></audio>
   <audio id="failure-loop" src="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
-  <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
+  <audio id="error-prompt" src="assets/error-prompt-stutter-v3.m4a" preload="auto"></audio>
   <audio id="access-granted-voice" src="assets/access-granted-system.m4a?v=zarvox1" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
@@ -2194,6 +2194,7 @@
     let criticalAssetsReady = null;
     let errorPromptBuffer = null;
     let errorPromptBufferReady = null;
+    let errorPromptSources = new Set();
 
     function setGateContent(title, copy, status, ready) {
       if (gateTitle) gateTitle.textContent = title;
@@ -2728,6 +2729,14 @@
       try { audio.currentTime = 0; } catch (_) {}
     }
 
+    function stopErrorPromptPlayback() {
+      errorPromptSources.forEach((source) => {
+        try { source.stop(); } catch (_) {}
+      });
+      errorPromptSources.clear();
+      pauseMedia(errorPromptAudio);
+    }
+
     function loadErrorPromptBuffer() {
       if (!audioCtx || !errorPromptAudio) return Promise.resolve(null);
       if (!errorPromptBufferReady) {
@@ -2757,6 +2766,10 @@
       gain.gain.linearRampToValueAtTime(0.0001, now + errorVoiceDuration / 1000);
       source.connect(gain);
       gain.connect(audioCtx.destination);
+      errorPromptSources.add(source);
+      source.onended = () => {
+        errorPromptSources.delete(source);
+      };
       source.start(now);
       return true;
     }
@@ -2803,8 +2816,9 @@
     }
 
     function playErrorPrompt(runId) {
-      if (!playErrorPromptBuffer()) playErrorPromptSound();
-      return wait(errorVoiceDuration, runId);
+      stopErrorPromptPlayback();
+      if (playErrorPromptBuffer()) return wait(errorVoiceDuration, runId);
+      return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration);
     }
 
     function startFailureLoop() {
@@ -2993,6 +3007,7 @@
       }
 
       setStatic(false);
+      stopErrorPromptPlayback();
       setPhase("granted");
       schedule(() => {
         if (activeRun === runId) stopFailureLoop();
@@ -3050,6 +3065,7 @@
       setStatic(false);
       setArmed(false);
       jumped = false;
+      stopErrorPromptPlayback();
       mediaElements.forEach(pauseMedia);
       soundReady = false;
       setBlackboxControls(false);
