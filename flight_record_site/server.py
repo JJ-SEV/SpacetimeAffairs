@@ -1971,7 +1971,7 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
           <span class="pilot-id-hint" aria-live="polite"></span>
         </label>
         <label>密码
-          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="current-password" required>
+          <input name="password" class="auth-input code-input" type="password" inputmode="numeric" pattern="(19|20)[0-9]{{6}}" minlength="8" maxlength="8" autocomplete="off" required>
           <span class="pilot-id-hint password-age-hint" aria-live="polite"></span>
         </label>
         <div class="digit-rack" aria-hidden="true">
@@ -2027,6 +2027,14 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     pilotInput.classList.toggle("invalid", invalid);
     pilotHint.textContent = invalid ? "飞行员ID不存在" : "";
     return value.length === 0 || validPilots.has(value);
+  }}
+  function clearCodeInput() {{
+    codeInput.value = "";
+    codeInput.setCustomValidity("");
+    codeInput.classList.remove("invalid");
+    cells.forEach((cell) => cell.classList.remove("filled"));
+    state.textContent = "SYNC 0/8";
+    if (passwordAgeHint) passwordAgeHint.textContent = "";
   }}
   function flashInvalid() {{
     digitRack.classList.add("invalid");
@@ -2097,11 +2105,13 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
     if (passwordAgeHint) passwordAgeHint.textContent = codeInvalid ? status.message : "";
     if (codeInvalid && showError) {{
       flashInvalid();
+      clearCodeInput();
       return;
     }}
     if (result.rejected && showError) {{
       recordPasswordFailure(true);
       flashInvalid();
+      clearCodeInput();
       return;
     }}
   }}
@@ -2182,13 +2192,16 @@ def player_gate_page(message: str = "", password_hint_attempt: bool = False) -> 
       if (!codeInput.checkValidity()) {{
         event.preventDefault();
         flashInvalid();
+        clearCodeInput();
         codeInput.focus();
       }}
     }});
     syncPilot(false);
+    clearCodeInput();
     syncCode();
     if (passwordHintAttempt) {{
       recordPasswordFailure(false);
+      clearCodeInput();
     }}
   </script>
   """
