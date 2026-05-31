@@ -2197,6 +2197,7 @@
     const startupStepDuration = 480;
     const startupStepSettle = 70;
     const startupAssetTimeout = 1800;
+    const signingImageTimeout = 18000;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
@@ -3202,9 +3203,13 @@
         setStartupChecklistComplete();
         setGateContent("飞行纪录已装载", "正在校验飞行纪录图与签发模组", "Loading", false);
         showAudioChoice();
-        const imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
+        let imagesOk = await Promise.race([imagesReady, sleep(signingImageTimeout).then(() => false)]);
         if (!imagesOk) {
-          setGateContent("图像模组加载失败", "网络不稳定，请重新部署", "Retry", true);
+          setGateContent("飞行纪录已装载", "正在重新拉取飞行纪录图与签发模组", "Retrying", false);
+          imagesOk = await Promise.race([reloadSigningImages(), sleep(signingImageTimeout).then(() => false)]);
+        }
+        if (!imagesOk) {
+          setGateContent("模组启动失败", "网络不稳定，请重新部署", "Retry", true);
           return;
         }
         setGateContent("飞行纪录已装载", "点击确认部署启动签发", "Ready", true);
@@ -3244,14 +3249,14 @@
         await Promise.race([soundUnlock, sleep(1400)]);
       }
       setGateContent("签发模组启动中", "正在校验飞行纪录图与扫描模组", "Loading", false);
-      let imagesOk = await Promise.race([imagesReady, sleep(10000).then(() => false)]);
+      let imagesOk = await Promise.race([imagesReady, sleep(signingImageTimeout).then(() => false)]);
       if (!imagesOk) {
         setGateContent("签发模组启动中", "正在重新拉取飞行纪录图与扫描模组", "Retrying", false);
-        imagesOk = await Promise.race([reloadSigningImages(), sleep(10000).then(() => false)]);
+        imagesOk = await Promise.race([reloadSigningImages(), sleep(signingImageTimeout).then(() => false)]);
       }
       if (activeRun !== runId) return;
       if (!imagesOk) {
-        setGateContent("图像模组加载失败", "网络不稳定，请重新部署", "Retry", true);
+        setGateContent("模组启动失败", "网络不稳定，请重新部署", "Retry", true);
         showAudioChoice();
         return;
       }
