@@ -56,6 +56,48 @@ LOCKED_PREVIEW_BADGE_VERSION = "v4"
 ANIMATION_PREVIEW_MAX_DIMENSION = 1400
 ANIMATION_PREVIEW_VERSION = "unstamped-v1"
 RECORD_JPG_VERSION = "jpg-v1"
+STATIC_CSS_VERSION = "20260531-critical-fallback"
+CRITICAL_LAYOUT_CSS = """
+:root{--ink:#eff7f4;--panel:rgba(9,17,25,.78);--line:rgba(133,181,202,.34);--muted:#9eb2b5;--accent:#ff7b35;--gold:#e7b45c;--cyan:#67c7ef;--green:#80e3bc;--wash:#071018}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;background:#071018;color:var(--ink);font-family:Inter,"Noto Sans SC",system-ui,-apple-system,BlinkMacSystemFont,sans-serif}
+body.home-body{background:linear-gradient(180deg,rgba(4,10,16,.38),rgba(4,9,14,.98)),#071018}
+.shell{position:relative;z-index:1;width:min(1220px,calc(100% - 32px));margin:0 auto;padding:24px 0 44px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:92px;padding:20px 24px;color:#f8f9ee;background:linear-gradient(135deg,rgba(8,15,23,.94),rgba(19,31,42,.84));border:1px solid rgba(103,199,239,.28);border-bottom:3px solid rgba(255,123,53,.86);border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
+.topbar h1{margin:6px 0 0;font-family:"Times New Roman",serif;font-size:36px;line-height:1.1}
+.eyebrow{margin:0;color:var(--cyan);font-family:"Times New Roman",serif;font-size:13px;font-weight:700;letter-spacing:0;text-transform:uppercase}
+nav{display:flex;gap:10px;flex-wrap:wrap}
+nav a,.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid rgba(103,199,239,.42);border-radius:6px;background:linear-gradient(180deg,rgba(255,123,53,.94),rgba(181,72,32,.96));color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
+nav a{border-color:rgba(103,199,239,.28);background:rgba(6,14,22,.68);color:#dceff3}
+.panel{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(12,22,31,.92),rgba(8,16,24,.76)),var(--panel);border:1px solid rgba(103,199,239,.3);border-radius:8px;padding:24px;box-shadow:0 18px 46px rgba(0,0,0,.28)}
+.panel::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(103,199,239,.09),transparent 22%,transparent 78%,rgba(255,123,53,.08)),repeating-linear-gradient(0deg,transparent 0 31px,rgba(103,199,239,.05) 32px)}
+.panel>*{position:relative}
+.panel.wide{margin-top:18px}
+.confirm-panel{border-color:rgba(255,123,53,.5)}
+.success-panel{border-color:rgba(128,227,188,.44)}
+.section-head{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.section-head span{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-left:8px solid var(--accent);color:var(--cyan);font-family:"Times New Roman",serif;font-weight:700}
+.section-head h2,.submission h3{margin:0;font-size:22px;color:#f2fbf6}
+.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0}
+.meta div{padding:14px;background:rgba(4,10,16,.42);border:1px solid rgba(103,199,239,.22)}
+dt{color:var(--muted);font-size:12px;font-weight:700}
+dd{margin:6px 0 0;overflow-wrap:anywhere}
+.screen-warning{display:grid;gap:6px;margin-top:18px;padding:14px 16px;border:1px solid rgba(231,180,92,.4);border-left:8px solid var(--gold);background:rgba(13,20,27,.72)}
+.screen-warning span{color:var(--gold);font-weight:800}
+.actions,.confirm-actions,.preview-actions{display:flex;gap:12px;flex-wrap:wrap}
+.flight-confirm-actions{max-width:280px;margin-top:16px}
+.confirm-button{width:100%}
+.record-preview-frame{overflow:hidden;border:1px solid rgba(103,199,239,.3);border-radius:8px;background:rgba(2,8,13,.64)}
+.record-preview{display:block;width:100%;height:auto}
+.preload-probe{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.auth-body{background:#071018;color:var(--ink)}
+.auth-shell{min-height:100vh;display:grid;place-items:center;padding:32px 16px}
+.auth-card{display:grid;gap:14px;width:min(520px,100%);padding:24px;border:1px solid rgba(103,199,239,.34);border-radius:8px;background:rgba(9,17,25,.82)}
+.auth-input{width:100%;min-height:48px;padding:0 14px;border:1px solid rgba(103,199,239,.48);border-radius:8px;background:rgba(2,8,13,.62);color:var(--ink);font:inherit}
+.auth-submit{width:100%;min-height:48px}
+@media(max-width:760px){.shell{width:min(100% - 24px,1220px);padding:16px 0 36px}.topbar{align-items:stretch;flex-direction:column;min-height:0;padding:18px}.topbar h1{font-size:30px}.meta{grid-template-columns:1fr}.panel{padding:18px}nav{width:100%}nav a{flex:1 1 120px}}
+"""
 STATIC_GALLERY_ITEMS = (
     {"slug": "bantouming-qinzhan", "title": "半透明侵占", "file": "bantouming-qinzhan.jpg"},
     {"slug": "shuangying-jiaodieshi", "title": "双影交叠时", "file": "shuangying-jiaodieshi.jpg"},
@@ -1790,7 +1832,8 @@ def layout(title: str, body: str, admin: bool = False, body_class: str = "") -> 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <style>{CRITICAL_LAYOUT_CSS}</style>
+  <link rel="stylesheet" href="/static/styles.css?v={STATIC_CSS_VERSION}">
 </head>
 <body{body_class_attr}>
   <main class="shell">
@@ -1815,7 +1858,8 @@ def auth_layout(title: str, body: str) -> bytes:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <style>{CRITICAL_LAYOUT_CSS}</style>
+  <link rel="stylesheet" href="/static/styles.css?v={STATIC_CSS_VERSION}">
 </head>
 <body class="auth-body">
   {body}
