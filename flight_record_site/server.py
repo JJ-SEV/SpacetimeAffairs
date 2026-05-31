@@ -2264,7 +2264,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             path = GENERATED_DIR / row["png_filename"]
-            if not regenerate_record_files(row, force=True):
+            if not regenerate_record_files(row):
                 self.send_error(404)
                 return
             animation_path = animation_preview_path(row, path)

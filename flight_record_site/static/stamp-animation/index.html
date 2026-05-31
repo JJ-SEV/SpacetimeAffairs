@@ -296,18 +296,50 @@
       top: 0;
       bottom: 0;
       width: 4px;
-      background: var(--amber);
+      background: rgba(101,213,255,.42);
       transform: scaleY(0);
       transform-origin: top;
       animation: statusBar 6.2s ease forwards;
       animation-delay: var(--delay);
     }
 
+    .readout div.is-active {
+      border-color: rgba(101,213,255,.48);
+      background: linear-gradient(90deg, rgba(101,213,255,.12), rgba(4,13,19,.62));
+      box-shadow: inset 0 0 26px rgba(101,213,255,.08);
+    }
+
+    .readout div.is-active::before {
+      animation: none !important;
+      transform: scaleY(1) !important;
+      background: var(--amber);
+    }
+
+    .readout div.is-complete {
+      border-color: rgba(130,255,210,.52);
+      background: linear-gradient(90deg, rgba(130,255,210,.12), rgba(4,13,19,.62));
+      box-shadow: inset 0 0 26px rgba(130,255,210,.08);
+    }
+
+    .readout div.is-complete::before {
+      animation: none !important;
+      transform: scaleY(1) !important;
+      background: var(--mint);
+    }
+
     .readout b {
       display: block;
-      color: var(--mint);
+      color: rgba(236,248,243,.72);
       font-size: 12px;
       letter-spacing: 0;
+    }
+
+    .readout div.is-active b {
+      color: var(--cyan);
+    }
+
+    .readout div.is-complete b {
+      color: var(--mint);
     }
 
     .readout span {
@@ -338,6 +370,19 @@
       animation: progressFail 6.5s ease forwards;
     }
 
+    body[data-phase="preloading"] .progress {
+      animation: none;
+      border-color: rgba(101,213,255,.36);
+      box-shadow: none;
+    }
+
+    body[data-phase="preloading"] .progress span {
+      animation: none !important;
+      transition: transform .82s cubic-bezier(.2,.76,.18,1), background .2s ease, box-shadow .2s ease;
+      background: linear-gradient(90deg, var(--cyan), var(--mint));
+      box-shadow: 0 0 22px rgba(130,255,210,.45);
+    }
+
     .complete {
       margin: 22px 0 0;
       color: var(--danger);
@@ -364,7 +409,6 @@
       transition: opacity .28s ease, visibility .28s ease;
     }
 
-    body[data-phase="preloading"] .audio-gate,
     body[data-phase="audio-choice"] .audio-gate {
       visibility: visible;
       opacity: 1;
@@ -1263,7 +1307,7 @@
     body:not([data-armed="true"]) .scanner-carriage,
     body:not([data-armed="true"]) .scan-light,
     body:not([data-armed="true"]) .pressure-pad,
-    body:not([data-armed="true"]) .readout div::before,
+    body:not([data-armed="true"]) .readout div:not(.is-active):not(.is-complete)::before,
     body:not([data-armed="true"]) .progress span,
     body:not([data-armed="true"]) .complete,
     html[data-frame] .record-shell,
@@ -1982,11 +2026,11 @@
       <p class="eyebrow">MISSION DEPLOYMENT</p>
       <h1>签发飞行纪录</h1>
       <div class="readout" aria-live="polite">
-        <div style="--delay:.2s"><b>01 / ROUTE LOCK</b><span>正在锁定任务目标与返航航道</span></div>
-        <div style="--delay:1.4s"><b>02 / RECORD BUILD</b><span>正在写入任务目标、坐标与飞行日志</span></div>
-        <div style="--delay:2.4s"><b>03 / SCAN SEAL</b><span>电子扫描模组正在压印签发</span></div>
+        <div data-load-step style="--delay:.2s"><b>01 / ROUTE LOCK</b><span>正在锁定任务目标与返航航道</span></div>
+        <div data-load-step style="--delay:1.4s"><b>02 / RECORD BUILD</b><span>正在写入任务目标、坐标与飞行日志</span></div>
+        <div data-load-step style="--delay:2.4s"><b>03 / SCAN SEAL</b><span>电子扫描模组正在压印签发</span></div>
       </div>
-      <div class="progress" aria-hidden="true"><span></span></div>
+      <div class="progress" aria-hidden="true"><span data-progress-bar></span></div>
       <p class="complete">SIGNATURE FAILED / 签发失败</p>
     </aside>
   </main>
@@ -2072,23 +2116,25 @@
     const errorPromptAudio = document.querySelector("#error-prompt");
     const accessGrantedAudio = document.querySelector("#access-granted-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const primeMediaElements = [signalAudio, failureLoopAudio, alarmAudio, accessGrantedAudio, electricGlitchAudio];
+    const primeMediaElements = [failureLoopAudio, alarmAudio, accessGrantedAudio, electricGlitchAudio];
     const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
+    const readoutSteps = Array.from(document.querySelectorAll("[data-load-step]"));
+    const progressBar = document.querySelector("[data-progress-bar]");
     const criticalImages = Array.from(document.querySelectorAll(".record"));
     const errorCanvas = document.querySelector(".error-canvas");
     const errorCtx = errorCanvas.getContext("2d");
     const stampDuration = 6500;
-    const alarmDuration = 3000;
+    const alarmDuration = 5000;
     const errorVoiceDuration = 3300;
     const warningStaticDelay = 1180;
     const electricGlitchDuration = 1450;
-    const blackboxOpenDelay = 820;
+    const blackboxOpenDelay = 120;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
     const failureLoopStopLead = 120;
     const MIX = Object.freeze({
-      alarm: 0.012,
+      alarm: 0.06,
       errorVoice: 0.94,
       failureLoop: 0.46,
       accessGrantedVoice: 0.88,
@@ -2098,12 +2144,12 @@
       scannerServo: 0.07,
       stampThump: 0.38,
       stampPing: 0.1,
-      fallbackAlarm: 0.003,
+      fallbackAlarm: 0.0045,
       unlockTone: 0.01,
       crackleNoise: 0.018,
       crackleSpark: 0.014,
       crackleSparkRange: 0.024,
-      stuckVoice: 0.14
+      stuckVoice: 0.2
     });
     let audioCtx = null;
     let soundReady = false;
@@ -2332,6 +2378,10 @@
       return timer;
     }
 
+    function sleep(delay) {
+      return new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
     function wait(delay, runId) {
       return new Promise((resolve) => {
         const timer = setTimeout(() => resolve(activeRun === runId), delay);
@@ -2341,6 +2391,43 @@
 
     function safeVolume(value) {
       return Math.max(0, Math.min(1, value));
+    }
+
+    function setProgressScale(value, animated = true) {
+      if (!progressBar) return;
+      progressBar.style.transition = animated ? "" : "none";
+      progressBar.style.transform = `scaleX(${Math.max(0, Math.min(1, value))})`;
+    }
+
+    function resetReadoutState() {
+      readoutSteps.forEach((step) => {
+        step.classList.remove("is-active", "is-complete");
+      });
+      if (progressBar) {
+        progressBar.style.transition = "";
+        progressBar.style.transform = "";
+        progressBar.style.background = "";
+        progressBar.style.boxShadow = "";
+      }
+    }
+
+    async function runStartupChecklist() {
+      resetReadoutState();
+      setProgressScale(0, false);
+      for (const step of readoutSteps) {
+        step.classList.add("is-active");
+        setProgressScale(0, false);
+        if (progressBar) progressBar.getBoundingClientRect();
+        setProgressScale(1, true);
+        await sleep(840);
+        step.classList.remove("is-active");
+        step.classList.add("is-complete");
+        await sleep(130);
+      }
+      if (progressBar) {
+        progressBar.style.background = "linear-gradient(90deg, var(--mint), #d9fff0)";
+        progressBar.style.boxShadow = "0 0 24px rgba(130,255,210,.6)";
+      }
     }
 
     function beep(at, freq, duration, gain = 0.08, type = "square", destination = null) {
@@ -2483,27 +2570,54 @@
       }
     }
 
-    function playErrorSyllable(at, base = 220) {
+    function playErrorSyllable(at, base = 185) {
       if (!audioCtx) return;
       const osc = audioCtx.createOscillator();
-      const formant = audioCtx.createBiquadFilter();
-      const amp = audioCtx.createGain();
+      const vowel = audioCtx.createGain();
+      const bite = audioCtx.createGain();
+      const output = audioCtx.createGain();
+      const lowFormant = audioCtx.createBiquadFilter();
+      const midFormant = audioCtx.createBiquadFilter();
+      const rasp = audioCtx.createBiquadFilter();
+
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(base, at);
-      osc.frequency.exponentialRampToValueAtTime(base * 0.74, at + .18);
-      formant.type = "bandpass";
-      formant.frequency.setValueAtTime(920, at);
-      formant.frequency.exponentialRampToValueAtTime(520, at + .22);
-      formant.Q.value = 7.2;
-      amp.gain.setValueAtTime(0.0001, at);
-      amp.gain.exponentialRampToValueAtTime(MIX.errorVoice, at + .025);
-      amp.gain.exponentialRampToValueAtTime(MIX.errorVoice * .45, at + .16);
-      amp.gain.exponentialRampToValueAtTime(0.0001, at + .34);
-      osc.connect(formant);
-      formant.connect(amp);
-      amp.connect(audioCtx.destination);
+      osc.frequency.exponentialRampToValueAtTime(base * .88, at + .12);
+      osc.frequency.exponentialRampToValueAtTime(base * .72, at + .2);
+
+      lowFormant.type = "bandpass";
+      lowFormant.frequency.setValueAtTime(610, at);
+      lowFormant.frequency.exponentialRampToValueAtTime(690, at + .1);
+      lowFormant.Q.value = 8.6;
+
+      midFormant.type = "bandpass";
+      midFormant.frequency.setValueAtTime(1680, at);
+      midFormant.frequency.exponentialRampToValueAtTime(1360, at + .16);
+      midFormant.Q.value = 9.4;
+
+      rasp.type = "bandpass";
+      rasp.frequency.setValueAtTime(2480, at);
+      rasp.frequency.exponentialRampToValueAtTime(2040, at + .11);
+      rasp.Q.value = 11;
+
+      vowel.gain.value = .86;
+      bite.gain.value = .32;
+      output.gain.setValueAtTime(0.0001, at);
+      output.gain.exponentialRampToValueAtTime(MIX.errorVoice * .74, at + .012);
+      output.gain.setValueAtTime(MIX.errorVoice * .66, at + .078);
+      output.gain.exponentialRampToValueAtTime(0.0001, at + .18);
+
+      osc.connect(lowFormant);
+      osc.connect(midFormant);
+      osc.connect(rasp);
+      lowFormant.connect(vowel);
+      midFormant.connect(vowel);
+      rasp.connect(bite);
+      vowel.connect(output);
+      bite.connect(output);
+      output.connect(audioCtx.destination);
       osc.start(at);
-      osc.stop(at + .38);
+      osc.stop(at + .22);
     }
 
     function playErrorStuckTone(at, duration = 1.08) {
@@ -2542,10 +2656,11 @@
     function playErrorPromptSound() {
       if (!audioCtx || !soundReady) return;
       const now = audioCtx.currentTime;
-      playErrorSyllable(now + .08, 230);
-      playErrorSyllable(now + .82, 212);
-      playErrorStuckTone(now + 1.58, 1.35);
-      playElectricCrackle(1.55);
+      [0.04, 0.28, 0.52, 0.76].forEach((offset, index) => {
+        playErrorSyllable(now + offset, 188 - index * 7);
+      });
+      playErrorStuckTone(now + 1.04, .74);
+      playElectricCrackle(1.36);
     }
 
     function playUnlockTone() {
@@ -2657,20 +2772,22 @@
     }
 
     function playErrorPrompt(runId) {
-      const fallback = () => playErrorPromptSound();
-      if (playErrorPromptBuffer()) {
-        return wait(errorVoiceDuration, runId);
-      }
-      return playMedia(errorPromptAudio, MIX.errorVoice, runId, errorVoiceDuration, fallback);
+      playErrorPromptSound();
+      return wait(errorVoiceDuration, runId);
     }
 
-    async function startFailureLoop() {
+    function startFailureLoop() {
       if (!soundReady) return () => {};
       try {
         failureLoopAudio.pause();
         failureLoopAudio.currentTime = 0;
         failureLoopAudio.volume = safeVolume(MIX.failureLoop);
-        await failureLoopAudio.play();
+        const playAttempt = failureLoopAudio.play();
+        if (playAttempt && typeof playAttempt.catch === "function") {
+          playAttempt.catch((error) => {
+            console.warn("Failure loop play failed", error && (error.name || error.message || error));
+          });
+        }
       } catch (error) {
         console.warn("Failure loop play failed", error && (error.name || error.message || error));
         return () => {};
@@ -2690,7 +2807,7 @@
 
     async function playWarningAudioSequence(runId) {
       if (!soundReady) {
-        if (!await wait(warningStaticDelay, runId)) return false;
+        if (!await wait(alarmDuration, runId)) return false;
         setStatic(true);
         if (!await wait(electricGlitchDuration, runId)) return false;
         setStatic(false);
@@ -2712,12 +2829,22 @@
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         await audioCtx.resume();
         contextReady = audioCtx.state === "running";
-        loadErrorPromptBuffer();
       } catch (error) {
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
       }
-      const mediaReady = (await Promise.all(primeMediaElements.map(primeMedia))).some(Boolean);
-      soundReady = contextReady || mediaReady;
+      const mediaWarmup = Promise.all(primeMediaElements.map(primeMedia)).then((results) => {
+        if (results.some(Boolean)) soundReady = true;
+      });
+      if (contextReady) {
+        soundReady = true;
+        mediaWarmup.catch(() => {});
+        return true;
+      }
+      const mediaReady = await Promise.race([
+        mediaWarmup.then(() => soundReady),
+        new Promise((resolve) => setTimeout(() => resolve(false), 180))
+      ]);
+      soundReady = Boolean(mediaReady);
       return soundReady;
     }
 
@@ -2816,7 +2943,6 @@
 
       let stopFailureLoop = () => {};
       setPhase("warning");
-      stopFailureLoop = await startFailureLoop();
       if (!await playWarningAudioSequence(runId)) {
         stopFailureLoop();
         return;
@@ -2824,6 +2950,7 @@
 
       setStatic(false);
       setPhase("blackout");
+      stopFailureLoop = startFailureLoop();
       if (!await playSignalAudio(runId)) {
         stopFailureLoop();
         return;
@@ -2864,12 +2991,17 @@
       setStatic(false);
       setArmed(false);
       setPhase("preloading");
-      setGateContent("准备签发", "正在载入飞行纪录图与扫描模组", "Loading record", false);
-      await waitForCriticalAssets();
+      if (signalAudio) signalAudio.load();
+      const assetsReady = waitForCriticalAssets().catch(() => {});
+      const checklist = runStartupChecklist();
       if (params.get("autostart") === "skip") {
+        await checklist;
+        await assetsReady;
         requestAnimationFrame(() => startStampSequence(false));
         return;
       }
+      await checklist;
+      await assetsReady;
       setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
       showAudioChoice();
     }
@@ -2887,12 +3019,15 @@
       setBlackboxControls(false);
 
       const soundUnlock = enableAudio ? unlockSound() : Promise.resolve(false);
-      await waitForCriticalAssets();
-      if (enableAudio) await soundUnlock;
+      waitForCriticalAssets().catch(() => {});
       if (activeRun !== runId) return;
 
+      resetReadoutState();
       setArmed(true);
       playScannerZoomSound();
+      soundUnlock.then(() => {
+        if (activeRun === runId && document.body.dataset.armed === "true") playScannerZoomSound();
+      }).catch(() => {});
       if (!await wait(stampDuration, runId)) return;
       playFailureSequence(runId);
     }
