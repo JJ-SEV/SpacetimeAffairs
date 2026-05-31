@@ -130,6 +130,7 @@
       transform: translate3d(-50%, -50%, 0) scale(.98);
       animation: recordEnter 6.2s cubic-bezier(.2,.75,.18,1) forwards;
       box-shadow: 0 24px 56px rgba(0,0,0,.42);
+      overflow: visible;
       will-change: transform, opacity;
     }
 
@@ -166,12 +167,17 @@
 
     .stamp-mark {
       position: absolute;
+      z-index: 6;
+      display: block;
       right: 5.5%;
       bottom: 5.8%;
       width: 21.5%;
+      height: auto;
       aspect-ratio: 1;
+      object-fit: contain;
       opacity: 0;
       transform: scale(1.08);
+      transform-origin: center;
       animation: embossReveal 6.2s cubic-bezier(.16,.84,.24,1) forwards;
       will-change: transform, opacity;
     }
@@ -1954,10 +1960,27 @@
         position: absolute;
         left: 50%;
         top: 50%;
-        width: min(95vw, calc((100svh - 344px) * 1.62));
+        width: min(95%, 95vw, calc((100svh - 344px) * 1.62));
         margin: 0;
         transform: translate3d(-50%, -50%, 0);
         animation-name: recordEnterMobile;
+      }
+
+      .stamp-mark {
+        right: 26%;
+        bottom: 7.6%;
+        width: 19.5%;
+      }
+
+      .impact-ring {
+        right: 26.15%;
+        bottom: 8.1%;
+        width: 19.2%;
+      }
+
+      .pressure-pad {
+        right: 25.75%;
+        width: 20%;
       }
 
       .status-panel {
