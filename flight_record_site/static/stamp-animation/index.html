@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flight Record Scanner Seal Preview</title>
+  <link rel="preload" as="audio" href="assets/xia-yizhou-signal.m4a?v=ce6de9d9v3" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/alarm-sound.m4a" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/error-error-en.m4a" type="audio/mp4">
+  <link rel="preload" as="audio" href="assets/electric-glitch.m4a" type="audio/mp4">
   <style>
     :root {
       --bg: #061018;
@@ -2017,6 +2022,7 @@
   <audio id="failure-loop" src="assets/error-background-loop-080a2fe3.m4a?v=080a2fe3" preload="auto" loop></audio>
   <audio id="alarm-sound" src="assets/alarm-sound.m4a" preload="auto"></audio>
   <audio id="error-prompt" src="assets/error-prompt-stutter.m4a" preload="auto"></audio>
+  <audio id="error-word" src="assets/error-error-en.m4a" preload="auto"></audio>
   <audio id="access-granted-voice" src="assets/access-granted-system.m4a?v=zarvox1" preload="auto"></audio>
   <audio id="electric-glitch" src="assets/electric-glitch.m4a" preload="auto"></audio>
   <div class="audio-gate" role="dialog" aria-modal="true" aria-labelledby="audio-gate-title">
@@ -2137,10 +2143,11 @@
     const failureLoopAudio = document.querySelector("#failure-loop");
     const alarmAudio = document.querySelector("#alarm-sound");
     const errorPromptAudio = document.querySelector("#error-prompt");
+    const errorWordAudio = document.querySelector("#error-word");
     const accessGrantedAudio = document.querySelector("#access-granted-voice");
     const electricGlitchAudio = document.querySelector("#electric-glitch");
-    const primeMediaElements = [failureLoopAudio, alarmAudio, accessGrantedAudio, electricGlitchAudio];
-    const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, accessGrantedAudio, electricGlitchAudio];
+    const primeMediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorWordAudio, accessGrantedAudio, electricGlitchAudio];
+    const mediaElements = [signalAudio, failureLoopAudio, alarmAudio, errorPromptAudio, errorWordAudio, accessGrantedAudio, electricGlitchAudio];
     const readoutSteps = Array.from(document.querySelectorAll("[data-load-step]"));
     const progressBar = document.querySelector("[data-progress-bar]");
     const criticalImages = Array.from(document.querySelectorAll(".record"));
@@ -2154,6 +2161,7 @@
     const blackboxOpenDelay = 120;
     const startupStepDuration = 480;
     const startupStepSettle = 70;
+    const startupAssetTimeout = 1800;
     const skipBlackboxDuration = 3200;
     const grantedDuration = 3200;
     const accessGrantedVoiceDelay = 1850;
@@ -2692,6 +2700,7 @@
     }
 
     async function primeMedia(audio) {
+      if (!audio) return false;
       const originalVolume = audio.volume;
       const originalMuted = audio.muted;
       let played = false;
@@ -2716,14 +2725,15 @@
     }
 
     function pauseMedia(audio) {
+      if (!audio) return;
       audio.pause();
       try { audio.currentTime = 0; } catch (_) {}
     }
 
     function loadErrorPromptBuffer() {
-      if (!audioCtx || !errorPromptAudio) return Promise.resolve(null);
+      if (!audioCtx || !errorWordAudio) return Promise.resolve(null);
       if (!errorPromptBufferReady) {
-        const src = errorPromptAudio.currentSrc || errorPromptAudio.src;
+        const src = errorWordAudio.currentSrc || errorWordAudio.src;
         errorPromptBufferReady = fetch(src)
           .then((response) => response.arrayBuffer())
           .then((buffer) => audioCtx.decodeAudioData(buffer))
@@ -2742,18 +2752,26 @@
     function playErrorPromptBuffer() {
       if (!audioCtx || !soundReady || !errorPromptBuffer) return false;
       const now = audioCtx.currentTime;
-      const source = audioCtx.createBufferSource();
-      const gain = audioCtx.createGain();
-      source.buffer = errorPromptBuffer;
-      gain.gain.setValueAtTime(safeVolume(MIX.errorVoice), now);
-      gain.gain.linearRampToValueAtTime(0.0001, now + errorVoiceDuration / 1000);
-      source.connect(gain);
-      gain.connect(audioCtx.destination);
-      source.start(now);
+      const clipStart = 0.02;
+      const clipLength = Math.min(0.18, Math.max(0.08, errorPromptBuffer.duration - clipStart));
+      [0.04, 0.28, 0.52, 0.76].forEach((offset, index) => {
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        source.buffer = errorPromptBuffer;
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(safeVolume(MIX.errorVoice * (0.92 - index * 0.08)), now + offset + 0.018);
+        gain.gain.setValueAtTime(safeVolume(MIX.errorVoice * (0.82 - index * 0.07)), now + offset + clipLength * 0.72);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + clipLength);
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        source.start(now + offset, clipStart, clipLength);
+      });
+      playElectricCrackle(1.22);
       return true;
     }
 
     function playMedia(audio, volume, runId, fallbackMs, fallback = null) {
+      if (!audio) return wait(fallbackMs, runId);
       if (!soundReady) {
         if (fallback) fallback();
         return wait(fallbackMs, runId);
@@ -2778,6 +2796,7 @@
         try {
           audio.pause();
           try { audio.currentTime = 0; } catch (_) {}
+          if (audio.readyState === 0) audio.load();
           audio.volume = safeVolume(volume);
           audio.onended = finishActiveRun;
           audio.onerror = finishActiveRun;
@@ -2793,7 +2812,7 @@
     }
 
     function playErrorPrompt(runId) {
-      playErrorPromptSound();
+      if (!playErrorPromptBuffer()) playErrorPromptSound();
       return wait(errorVoiceDuration, runId);
     }
 
@@ -2802,6 +2821,7 @@
       try {
         failureLoopAudio.pause();
         failureLoopAudio.currentTime = 0;
+        if (failureLoopAudio.readyState === 0) failureLoopAudio.load();
         failureLoopAudio.volume = safeVolume(MIX.failureLoop);
         const playAttempt = failureLoopAudio.play();
         if (playAttempt && typeof playAttempt.catch === "function") {
@@ -2846,16 +2866,19 @@
 
     async function unlockSound() {
       let contextReady = false;
+      const mediaWarmup = Promise.all(primeMediaElements.map(primeMedia)).then((results) => {
+        if (results.some(Boolean)) soundReady = true;
+        return soundReady;
+      });
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        await audioCtx.resume();
+        loadErrorPromptBuffer();
+        const resumed = audioCtx.resume();
+        if (resumed && typeof resumed.then === "function") await resumed;
         contextReady = audioCtx.state === "running";
       } catch (error) {
         console.warn("AudioContext unlock failed", error && (error.name || error.message || error));
       }
-      const mediaWarmup = Promise.all(primeMediaElements.map(primeMedia)).then((results) => {
-        if (results.some(Boolean)) soundReady = true;
-      });
       if (contextReady) {
         soundReady = true;
         mediaWarmup.catch(() => {});
@@ -2863,7 +2886,7 @@
       }
       const mediaReady = await Promise.race([
         mediaWarmup.then(() => soundReady),
-        new Promise((resolve) => setTimeout(() => resolve(false), 180))
+        new Promise((resolve) => setTimeout(() => resolve(false), 900))
       ]);
       soundReady = Boolean(mediaReady);
       return soundReady;
@@ -2894,6 +2917,7 @@
         signalAudio.onended = null;
         signalAudio.pause();
         signalAudio.currentTime = 0;
+        if (signalAudio.readyState === 0) signalAudio.load();
         signalAudio.volume = MIX.blackboxVoice;
         signalAudio.onended = () => {
           if (blackboxPlaybackRun === playbackRun && blackboxReplayButton) {
@@ -2964,6 +2988,7 @@
 
       let stopFailureLoop = () => {};
       setPhase("warning");
+      stopFailureLoop = startFailureLoop();
       if (!await playWarningAudioSequence(runId)) {
         stopFailureLoop();
         return;
@@ -2971,7 +2996,6 @@
 
       setStatic(false);
       setPhase("blackout");
-      stopFailureLoop = startFailureLoop();
       if (!await playSignalAudio(runId)) {
         stopFailureLoop();
         return;
@@ -3017,12 +3041,12 @@
       const checklist = runStartupChecklist();
       if (params.get("autostart") === "skip") {
         await checklist;
-        await assetsReady;
+        await Promise.race([assetsReady, sleep(startupAssetTimeout)]);
         requestAnimationFrame(() => startStampSequence(false));
         return;
       }
       await checklist;
-      await assetsReady;
+      await Promise.race([assetsReady, sleep(startupAssetTimeout)]);
       setGateContent("飞行纪录已装载", "点击启动签发并启用音频", "Ready", true);
       showAudioChoice();
     }

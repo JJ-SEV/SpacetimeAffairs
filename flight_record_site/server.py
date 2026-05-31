@@ -17,6 +17,7 @@ import secrets
 import shutil
 import sqlite3
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -63,6 +64,9 @@ STATIC_GALLERY_ITEMS = (
     {"slug": "zunming-siyangguan-01", "title": "遵命饲养官01", "file": "zunming-siyangguan-01.jpg"},
 )
 STATIC_GALLERY_BY_SLUG = {item["slug"]: item for item in STATIC_GALLERY_ITEMS}
+_ANIMATION_PREVIEW_LOCK = threading.Lock()
+_ANIMATION_PREVIEW_WARMING: set[str] = set()
+_ANIMATION_PREVIEW_WARMING_LOCK = threading.Lock()
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import render_xia_yizhou_pilot_flight_record_v2 as flight_renderer  # noqa: E402
@@ -712,31 +716,57 @@ def locked_preview_path(original_path: Path) -> Path | None:
 
 
 def animation_preview_path(row: sqlite3.Row, original_path: Path) -> Path | None:
-    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    source_path = PREVIEW_DIR / f"{original_path.stem}-animation-source-{ANIMATION_PREVIEW_VERSION}.png"
-    preview_path = PREVIEW_DIR / f"{original_path.stem}-animation-preview-{ANIMATION_PREVIEW_VERSION}.png"
-    if preview_path.exists() and preview_path.stat().st_mtime >= original_path.stat().st_mtime:
-        return preview_path
-    try:
-        flight_renderer.generate_record(
-            destination_name=row["destination_name"],
-            destination_coordinate=row["destination_coordinate"],
-            out_path=source_path,
-            pdf_path=None,
-            show_callsign=True,
-            show_stamp=False,
-        )
-        with Image.open(source_path) as source:
-            preview = source.convert("RGB")
-        preview.thumbnail(
-            (ANIMATION_PREVIEW_MAX_DIMENSION, ANIMATION_PREVIEW_MAX_DIMENSION),
-            Image.Resampling.LANCZOS,
-        )
-        preview.save(preview_path, "PNG", optimize=True)
-        return preview_path
-    except Exception as exc:
-        print(f"Failed to create animation preview for {row['id']}: {exc}", file=sys.stderr)
-        return None
+    with _ANIMATION_PREVIEW_LOCK:
+        PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        source_path = PREVIEW_DIR / f"{original_path.stem}-animation-source-{ANIMATION_PREVIEW_VERSION}.png"
+        preview_path = PREVIEW_DIR / f"{original_path.stem}-animation-preview-{ANIMATION_PREVIEW_VERSION}.png"
+        if preview_path.exists() and preview_path.stat().st_mtime >= original_path.stat().st_mtime:
+            return preview_path
+        try:
+            flight_renderer.generate_record(
+                destination_name=row["destination_name"],
+                destination_coordinate=row["destination_coordinate"],
+                out_path=source_path,
+                pdf_path=None,
+                show_callsign=True,
+                show_stamp=False,
+            )
+            with Image.open(source_path) as source:
+                preview = source.convert("RGB")
+            preview.thumbnail(
+                (ANIMATION_PREVIEW_MAX_DIMENSION, ANIMATION_PREVIEW_MAX_DIMENSION),
+                Image.Resampling.LANCZOS,
+            )
+            preview.save(preview_path, "PNG", optimize=True)
+            return preview_path
+        except Exception as exc:
+            print(f"Failed to create animation preview for {row['id']}: {exc}", file=sys.stderr)
+            return None
+
+
+def warm_animation_preview(submission_id: str) -> None:
+    submission_id = normalize_submission_id(submission_id)
+    if not submission_id:
+        return
+    with _ANIMATION_PREVIEW_WARMING_LOCK:
+        if submission_id in _ANIMATION_PREVIEW_WARMING:
+            return
+        _ANIMATION_PREVIEW_WARMING.add(submission_id)
+
+    def worker() -> None:
+        try:
+            row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+            if row is None or not row["png_filename"]:
+                return
+            path = GENERATED_DIR / row["png_filename"]
+            if not path.exists() and not regenerate_record_files(row):
+                return
+            animation_preview_path(row, path)
+        finally:
+            with _ANIMATION_PREVIEW_WARMING_LOCK:
+                _ANIMATION_PREVIEW_WARMING.discard(submission_id)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def record_jpg_path(row: sqlite3.Row, force: bool = False) -> Path | None:
@@ -1156,6 +1186,7 @@ def flight_confirm_page(submission_id: str) -> bytes:
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None or not row["png_filename"]:
         return destination_page("没找到这个飞行纪录。")
+    warm_animation_preview(row["id"])
     preview_token = quote(str(row["generated_at"] or row["id"]))
     animation_src = f"/animation-preview?id={esc(row['id'])}&v={preview_token}"
     body = f"""
@@ -1221,6 +1252,7 @@ def flight_loading_page(submission_id: str) -> bytes:
     row = db_row("SELECT * FROM submissions WHERE id = ?", (submission_id,))
     if row is None or not row["png_filename"]:
         return destination_page("没找到这个飞行纪录。")
+    warm_animation_preview(row["id"])
     if not STAMP_ANIMATION_TEMPLATE_PATH.exists():
         return flight_loading_fallback_page(submission_id)
     redirect_to = f"/record?id={esc(row['id'])}"
@@ -1240,6 +1272,7 @@ def flight_loading_page(submission_id: str) -> bytes:
         f'src="{record_src}"',
     )
     page = page.replace('src="assets/', 'src="/static/stamp-animation/assets/')
+    page = page.replace('href="assets/', 'href="/static/stamp-animation/assets/')
     page = page.replace(
         'window.location.href = "download-placeholder.html";',
         f'window.location.href = "{redirect_to}";',
@@ -2601,6 +2634,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 """,
                 (submission_id, now_text(), destination_name, address_hash, coord, png_name, pdf_name, now_text()),
             )
+            warm_animation_preview(submission_id)
             self.redirect(f"/flight/confirm?id={submission_id}")
         elif parsed.path == "/flight/confirm":
             if not self.require_player():
@@ -2766,6 +2800,7 @@ class FlightRecordHandler(BaseHTTPRequestHandler):
                 """,
                 (destination_name, address_hash, coord, png_name, pdf_name, now_text(), submission_id),
             )
+            warm_animation_preview(submission_id)
             self.redirect(f"/status?id={submission_id}")
         else:
             self.send_error(404)
