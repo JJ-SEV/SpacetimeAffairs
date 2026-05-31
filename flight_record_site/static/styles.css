@@ -1224,6 +1224,15 @@ button.danger {
   font-weight: 800;
 }
 
+.flight-sign-prep-eta {
+  margin: -4px 0 0;
+  min-height: 20px;
+  color: rgba(128, 227, 188, 0.9);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .flight-sign-prep-probe {
   position: absolute;
   width: 1px;
@@ -2254,6 +2263,10 @@ dd {
 
   .flight-sign-prep-status {
     font-size: 16px;
+  }
+
+  .flight-sign-prep-eta {
+    font-size: 13px;
   }
 
   .digit-rack {

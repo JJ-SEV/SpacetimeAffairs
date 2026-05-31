@@ -1288,6 +1288,7 @@ def flight_loading_page(submission_id: str) -> bytes:
       </span>
     </div>
     <p class="flight-sign-prep-status" data-prep-status>正在锁定任务目标与写入飞行日志</p>
+    <p class="flight-sign-prep-eta" data-prep-eta>系统加载中，预计部署完成时间还有：测算中</p>
     <img class="flight-sign-prep-probe" src="{record_src}" alt="" width="1" height="1" loading="eager" decoding="async" aria-hidden="true">
   </section>
 </main>
@@ -1299,6 +1300,7 @@ def flight_loading_page(submission_id: str) -> bytes:
   const audioAssets = {json.dumps(sign_audio_assets, ensure_ascii=False)};
   const steps = Array.from(document.querySelectorAll("[data-prep-step]"));
   const status = document.querySelector("[data-prep-status]");
+  const eta = document.querySelector("[data-prep-eta]");
   const stepState = steps.map((step) => ({{
     step,
     bar: step.querySelector("em"),
@@ -1306,6 +1308,8 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}));
   const progressBuckets = [[], []];
   let signMarkup = "";
+  let lastEtaSeconds = null;
+  const startedAt = performance.now();
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function clamp(value, min = 0, max = 1) {{
@@ -1318,9 +1322,38 @@ def flight_loading_page(submission_id: str) -> bytes:
     return bucket.reduce((sum, value) => sum + (value || 0), 0) / bucket.length;
   }}
 
+  function overallProgress() {{
+    return clamp((phaseProgress(0) + phaseProgress(1)) / 2);
+  }}
+
+  function updateEta() {{
+    if (!eta) return;
+    const progress = overallProgress();
+    if (progress >= .995) {{
+      eta.textContent = "系统加载完成，正在进入部署确认";
+      return;
+    }}
+    if (progress < .04) {{
+      eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
+      return;
+    }}
+    const elapsedSeconds = Math.max(.8, (performance.now() - startedAt) / 1000);
+    let secondsLeft = Math.ceil((elapsedSeconds / progress) * (1 - progress));
+    if (!Number.isFinite(secondsLeft)) {{
+      eta.textContent = "系统加载中，预计部署完成时间还有：测算中";
+      return;
+    }}
+    secondsLeft = Math.min(90, Math.max(2, secondsLeft));
+    if (lastEtaSeconds !== null) {{
+      secondsLeft = Math.ceil((lastEtaSeconds * .64) + (secondsLeft * .36));
+    }}
+    lastEtaSeconds = secondsLeft;
+    eta.textContent = "系统加载中，预计部署完成时间还有：" + secondsLeft + " 秒";
+  }}
+
   function updateStatus() {{
     if (!status) return;
-    const overall = Math.round(((phaseProgress(0) + phaseProgress(1)) / 2) * 100);
+    const overall = Math.round(overallProgress() * 100);
     if (overall < 45) {{
       status.textContent = "正在锁定任务目标与返航航道 " + overall + "%";
     }} else if (overall < 100) {{
@@ -1328,6 +1361,7 @@ def flight_loading_page(submission_id: str) -> bytes:
     }} else {{
       status.textContent = "飞行纪录已装载，正在进入签发页面";
     }}
+    updateEta();
   }}
 
   function setStepProgress(index, value) {{
@@ -1463,6 +1497,7 @@ def flight_loading_page(submission_id: str) -> bytes:
   }}
 
   async function run() {{
+    const etaTimer = setInterval(updateEta, 1000);
     const routeAssets = [
       {{run: (progress) => preloadJson(prepareUrl, progress)}},
       {{run: (progress) => preloadText(signUrl, progress)}},
@@ -1483,6 +1518,8 @@ def flight_loading_page(submission_id: str) -> bytes:
     setStepProgress(0, 1);
     await buildReady;
     setStepProgress(1, 1);
+    clearInterval(etaTimer);
+    updateEta();
     await sleep(260);
     enterSignPage();
   }}
